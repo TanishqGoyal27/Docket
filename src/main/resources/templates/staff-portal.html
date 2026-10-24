@@ -21,10 +21,10 @@
 
     <main class="container portal-cards pb-5">
 
+        <!-- Officer roles: go to the separate staff login page -->
         <div class="row g-4">
             <div class="col-12 col-md-6 col-lg-4" th:each="r : ${officerRoles}">
-                <!-- TODO: confirm login URL with Person 2 (assumed /login?role=...) -->
-                <a class="role-card" th:classappend="${r.group()}" th:href="@{/login(role=${r.code()})}">
+                <a class="role-card" th:classappend="${r.group()}" th:href="@{/staff/login(role=${r.code()})}">
                     <div class="role-icon" th:text="${r.icon()}">🗂️</div>
                     <h5 class="fw-bold" th:text="${r.title()}">Role</h5>
                     <p class="text-secondary" th:text="${r.description()}">Description</p>
@@ -33,10 +33,11 @@
             </div>
         </div>
 
+        <!-- Administrator: uses Person 2's normal /login (admin console is /admin/home) -->
         <h6 class="text-uppercase text-secondary mt-5 mb-3">System administration</h6>
         <div class="row">
             <div class="col-12 col-lg-6">
-                <a class="role-card admin" th:href="@{/login(role=${adminRole.code()})}">
+                <a class="role-card admin" th:href="@{/login}">
                     <div class="d-flex align-items-center gap-3">
                         <div class="role-icon mb-0" th:text="${adminRole.icon()}">⚙️</div>
                         <div>

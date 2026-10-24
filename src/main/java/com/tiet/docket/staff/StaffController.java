@@ -14,10 +14,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class StaffController {
 
         // ---------- Portal (role chooser) ----------
-        @GetMapping("/")
-        public String home() {
-                return "redirect:/staff/portal";
-        }
 
         @GetMapping("/staff/portal")
         public String portal(Model model) {
@@ -42,6 +38,31 @@ public class StaffController {
                                 "Manages users, roles, departments, required documents and approval sequences.", "⚙️",
                                 "admin"));
                 return "staff-portal";
+        }
+
+        // ---------- Staff login page ----------
+
+        @GetMapping("/staff/login")
+        public String staffLogin(@RequestParam(required = false) String role, Model model) {
+                // Used only to DISPLAY a title. The real role comes from the user's account.
+                String roleTitle = switch (role == null ? "" : role) {
+                        case "ADMIN_OFFICER" -> "Administrative Officer";
+                        case "PROFESSOR" -> "Professor / Supervisor";
+                        case "HOD" -> "Head of Department";
+                        case "SCHOLARSHIP_OFFICER" -> "Scholarship Officer";
+                        case "FINANCE_OFFICER" -> "Finance Officer";
+                        case "ACCOUNTS_OFFICER" -> "Accounts Officer";
+                        default -> "Staff";
+                };
+                model.addAttribute("roleTitle", roleTitle);
+                return "staff-login";
+        }
+
+        // Person 2's HomeController redirects every staff role here after a normal
+        // /login
+        @GetMapping("/staff/home")
+        public String staffHome() {
+                return "redirect:/staff/dashboard";
         }
 
         // ---------- Dashboard ----------
