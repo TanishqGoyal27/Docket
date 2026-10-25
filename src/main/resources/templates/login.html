@@ -20,6 +20,9 @@
                         <div th:if="${param.error}" class="alert alert-danger">
                             Login failed. Check your email and password. The account locks after 3 wrong attempts.
                         </div>
+                        <div th:if="${param.locked}" class="alert alert-warning">
+                            Your account is locked for 30 minutes after 3 failed attempts. Please try again later.
+                        </div>
                         <div th:if="${param.logout}" class="alert alert-success">
                             You have been logged out.
                         </div>
