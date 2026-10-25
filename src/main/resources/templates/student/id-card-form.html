@@ -24,6 +24,8 @@
             </ul>
         </div>
 
+        <div id="sizeError" class="alert alert-danger d-none" role="alert"></div>
+
         <form method="post" enctype="multipart/form-data" th:action="@{/student/apply/id-card}">
 
             <!-- Student details (read-only) -->
@@ -74,6 +76,38 @@
         </form>
 
     </div>
+
+    <script>
+        // Maximum allowed file size in megabytes (10 MB in Docket)
+        const MAX_MB = 10;
+        const maxSizeBytes = MAX_MB * 1024 * 1024;
+        const form = document.querySelector('form');
+        const sizeError = document.getElementById('sizeError');
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+
+        form.addEventListener('submit', function (event) {
+            for (const input of fileInputs) {
+                if (input.files && input.files.length > 0) {
+                    const file = input.files[0];
+                    if (file.size > maxSizeBytes) {
+                        event.preventDefault();
+                        sizeError.textContent = file.name + ' is larger than ' + MAX_MB + ' MB. Please choose a smaller file.';
+                        sizeError.classList.remove('d-none');
+                        sizeError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                }
+            }
+            sizeError.classList.add('d-none');
+        });
+
+        // Hide the error alert as soon as the user selects a new file
+        fileInputs.forEach(function (input) {
+            input.addEventListener('change', function () {
+                sizeError.classList.add('d-none');
+            });
+        });
+    </script>
 </body>
 
 </html>
