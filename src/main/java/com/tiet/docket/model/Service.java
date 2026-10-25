@@ -18,6 +18,10 @@ public class Service {
 
     private boolean active = true;       // admin can switch a service on or off
 
+    // Indicates whether approving the final stage should update student details
+    @Column(name = "updates_student_record")
+    private boolean updatesStudentRecord = false;
+
     public Service() {}
 
     public Long getId() { return id; }
@@ -31,4 +35,7 @@ public class Service {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public boolean isUpdatesStudentRecord() { return updatesStudentRecord; }
+    public void setUpdatesStudentRecord(boolean updatesStudentRecord) { this.updatesStudentRecord = updatesStudentRecord; }
 }

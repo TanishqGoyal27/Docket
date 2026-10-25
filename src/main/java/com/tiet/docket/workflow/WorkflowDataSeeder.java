@@ -51,6 +51,14 @@ public class WorkflowDataSeeder implements CommandLineRunner {
                 stage("Initial review", Role.ADMIN_OFFICER),
                 stage("Correction approval", Role.ADMINISTRATOR));
 
+        // Details Correction updates student profile upon final approval
+        serviceRepository.findByName("Details Correction").ifPresent(service -> {
+            if (!service.isUpdatesStudentRecord()) {
+                service.setUpdatesStudentRecord(true);
+                serviceRepository.save(service);
+            }
+        });
+
         // ----------------------------------------------------------------
         // 2.  Seed required documents for each service.
         //     addDocument() is idempotent: it skips if the document

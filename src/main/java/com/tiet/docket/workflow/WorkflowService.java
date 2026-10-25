@@ -4,14 +4,19 @@ import com.tiet.docket.model.Application;
 import com.tiet.docket.model.ApplicationStatus;
 import com.tiet.docket.model.DecisionHistory;
 import com.tiet.docket.model.DecisionType;
+import com.tiet.docket.model.PaymentRecord;
 import com.tiet.docket.model.Role;
 import com.tiet.docket.model.Stage;
 import com.tiet.docket.model.User;
 import com.tiet.docket.repository.ApplicationRepository;
 import com.tiet.docket.repository.DecisionHistoryRepository;
+import com.tiet.docket.repository.PaymentRecordRepository;
 import com.tiet.docket.repository.StageRepository;
+import com.tiet.docket.repository.UserRepository;
 import org.springframework.stereotype.Service;   // Spring's @Service, not our model.Service
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,17 +29,23 @@ public class WorkflowService {
     private final StageRepository stageRepository;
     private final DecisionHistoryRepository decisionHistoryRepository;
     private final NotificationService notificationService;
+    private final PaymentRecordRepository paymentRecordRepository;
+    private final UserRepository userRepository;
 
-    // NotificationService is added to the constructor alongside the existing
-    // repositories.  The six public method signatures are NOT changed.
+    // Repositories and notification service injected via constructor.
+    // The six public method signatures are NOT changed.
     public WorkflowService(ApplicationRepository applicationRepository,
                            StageRepository stageRepository,
                            DecisionHistoryRepository decisionHistoryRepository,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           PaymentRecordRepository paymentRecordRepository,
+                           UserRepository userRepository) {
         this.applicationRepository = applicationRepository;
         this.stageRepository = stageRepository;
         this.decisionHistoryRepository = decisionHistoryRepository;
         this.notificationService = notificationService;
+        this.paymentRecordRepository = paymentRecordRepository;
+        this.userRepository = userRepository;
     }
 
     // ---------------------------------------------------------------
@@ -92,6 +103,13 @@ public class WorkflowService {
         checkOfficerCanAct(app, officer);
 
         Stage current = app.getCurrentStage();
+
+        // Task 1D: Guard that accounts officer records payment before processing
+        if (current.getHandlerRole() == Role.ACCOUNTS_OFFICER
+                && !paymentRecordRepository.existsByApplication(app)) {
+            throw new IllegalStateException("Record the payment reference and date before processing");
+        }
+
         Optional<Stage> next = stageRepository.findByServiceAndStepOrder(
                 app.getService(), current.getStepOrder() + 1);
 
@@ -123,6 +141,25 @@ public class WorkflowService {
 
         } else {
             // Last stage: the application is finished.
+
+            // Task 2D: If this service updates the student record (e.g. Details Correction)
+            if (app.getService().isUpdatesStudentRecord()) {
+                applyStudentRecordChange(app);
+                recordDecision(app, current, officer, DecisionType.APPROVED, null);
+                app.setCurrentStage(null);
+                app.setStatus(ApplicationStatus.CLOSED);
+                Application saved = applicationRepository.save(app);
+
+                // ---- Notifications ----
+                String ref = saved.getReferenceNumber();
+                sendSafely(() ->
+                    notificationService.notifyUser(
+                        saved.getStudent(), saved,
+                        "Application " + ref + " was approved and your record has been updated.")
+                );
+                return saved;
+            }
+
             boolean paymentStage = current.getHandlerRole() == Role.ACCOUNTS_OFFICER;
             recordDecision(app, current, officer,
                     paymentStage ? DecisionType.PROCESSED : DecisionType.APPROVED, null);
@@ -141,6 +178,52 @@ public class WorkflowService {
             );
             return saved;
         }
+    }
+
+    // ---------------------------------------------------------------
+    // RECORD PAYMENT AND PROCESS: Accounts Officer saves payment details
+    // and completes the stage, marking the application as PROCESSED.
+    // ---------------------------------------------------------------
+    @Transactional
+    public Application recordPaymentAndProcess(Long applicationId, User officer,
+                                               String paymentReference, LocalDate paymentDate) {
+        if (paymentReference == null || paymentReference.isBlank()) {
+            throw new IllegalArgumentException("Payment reference is required and cannot be blank");
+        }
+        if (paymentDate == null) {
+            throw new IllegalArgumentException("Payment date is required and cannot be null");
+        }
+
+        Application app = findApplication(applicationId);
+        checkOfficerCanAct(app, officer);
+
+        Stage current = app.getCurrentStage();
+        if (current.getHandlerRole() != Role.ACCOUNTS_OFFICER) {
+            throw new IllegalStateException("This application is not at the payment stage");
+        }
+
+        // Save the payment record
+        PaymentRecord record = new PaymentRecord();
+        record.setApplication(app);
+        record.setRecordedBy(officer);
+        record.setPaymentReference(paymentReference.trim());
+        record.setPaymentDate(paymentDate);
+        paymentRecordRepository.save(record);
+
+        // Complete the stage (same as existing approve logic for accounts officer)
+        recordDecision(app, current, officer, DecisionType.PROCESSED, null);
+        app.setCurrentStage(null);
+        app.setStatus(ApplicationStatus.PROCESSED);
+        Application saved = applicationRepository.save(app);
+
+        // ---- Notifications ----
+        String ref = saved.getReferenceNumber();
+        sendSafely(() ->
+            notificationService.notifyUser(
+                saved.getStudent(), saved,
+                "Application " + ref + " has been processed.")
+        );
+        return saved;
     }
 
     // ---------------------------------------------------------------
@@ -293,5 +376,58 @@ public class WorkflowService {
             System.err.println("[NotificationService] Notification failed (ignored): "
                     + e.getMessage());
         }
+    }
+
+    /**
+     * Parses the application's JSON formData and updates the student's User record.
+     * Whitelist allowed fields: "name", "phone", "course", "rollNumber".
+     * Throws IllegalStateException if formData is missing, invalid, or field is not allowed.
+     */
+    private void applyStudentRecordChange(Application app) {
+        String formData = app.getFormData();
+        if (formData == null || formData.isBlank()) {
+            throw new IllegalStateException("Form data is missing or empty");
+        }
+
+        JsonNode root;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            root = mapper.readTree(formData);
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid JSON format in form data: " + e.getMessage(), e);
+        }
+
+        if (root == null || !root.isObject()) {
+            throw new IllegalStateException("Form data must be a valid JSON object");
+        }
+
+        JsonNode fieldNode = root.get("field");
+        JsonNode valueNode = root.get("newValue");
+
+        if (fieldNode == null || fieldNode.isNull()) {
+            throw new IllegalStateException("Field name is missing in form data");
+        }
+        String field = fieldNode.asText();
+        if (field.isBlank()) {
+            throw new IllegalStateException("Field name cannot be blank");
+        }
+
+        if (valueNode == null || valueNode.isNull()) {
+            throw new IllegalStateException("New value is missing in form data");
+        }
+        String newValue = valueNode.asText();
+        if (newValue.isBlank()) {
+            throw new IllegalStateException("New value cannot be blank");
+        }
+
+        User student = app.getStudent();
+        switch (field) {
+            case "name" -> student.setName(newValue);
+            case "phone" -> student.setPhone(newValue);
+            case "course" -> student.setCourse(newValue);
+            case "rollNumber" -> student.setRollNumber(newValue);
+            default -> throw new IllegalStateException("Field '" + field + "' is not allowed to be updated");
+        }
+        userRepository.save(student);
     }
 }
