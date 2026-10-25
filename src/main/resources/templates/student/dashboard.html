@@ -16,9 +16,17 @@
                 <h3 class="mb-0">My Applications</h3>
                 <small class="text-muted">Welcome, <span th:text="${studentName}">Student</span></small>
             </div>
-            <form th:action="@{/logout}" method="post">
-                <button type="submit" class="btn btn-outline-secondary btn-sm">Log out</button>
-            </form>
+            <div class="d-flex align-items-center gap-2">
+                <a th:href="@{/student/notifications}" class="btn btn-outline-primary btn-sm position-relative">
+                    Notifications
+                    <span th:if="${unreadCount != null and unreadCount > 0}"
+                          class="badge rounded-pill bg-danger ms-1"
+                          th:text="${unreadCount}">1</span>
+                </a>
+                <form th:action="@{/logout}" method="post">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">Log out</button>
+                </form>
+            </div>
         </div>
 
         <div th:if="${successMessage}" class="alert alert-success mb-3" th:text="${successMessage}">
@@ -51,7 +59,13 @@
                         </thead>
                         <tbody>
                             <tr th:each="app : ${applications}">
-                                <td th:text="${app.referenceNumber != null ? app.referenceNumber : '-'}">-</td>
+                                <td>
+                                    <a th:if="${app.referenceNumber != null}"
+                                       th:href="@{'/student/applications/' + ${app.id}}"
+                                       th:text="${app.referenceNumber}"
+                                       class="fw-semibold text-decoration-none">Reference</a>
+                                    <span th:unless="${app.referenceNumber != null}">-</span>
+                                </td>
                                 <td th:text="${app.service.name}">Service</td>
                                 <td>
                                     <span class="badge"

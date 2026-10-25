@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Docket - Application Detail</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+    <div class="container mt-4 mb-5" style="max-width: 800px;">
+
+        <div class="mb-3">
+            <a th:href="@{/student/dashboard}" class="text-decoration-none">&larr; Back to dashboard</a>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <div>
+                <h3 class="mb-0" th:text="${application.referenceNumber != null ? application.referenceNumber : ('#' + application.id)}">DKT-2026-0001</h3>
+                <small class="text-muted" th:text="${application.service.name}">Service Name</small>
+            </div>
+            <div>
+                <span class="badge fs-6"
+                      th:classappend="${application.status.name() == 'APPROVED' or application.status.name() == 'PROCESSED' or application.status.name() == 'CLOSED'} ? 'bg-success' :
+                                (${application.status.name() == 'REJECTED'} ? 'bg-danger' :
+                                (${application.status.name() == 'AWAITING_CORRECTION'} ? 'bg-warning text-dark' :
+                                (${application.status.name() == 'VERIFIED'} ? 'bg-info text-dark' : 'bg-primary')))"
+                      th:text="${application.status.name().replace('_', ' ')}">SUBMITTED</span>
+            </div>
+        </div>
+
+        <!-- Prominent correction alert if awaiting correction -->
+        <div th:if="${application.status.name() == 'AWAITING_CORRECTION'}" class="alert alert-warning mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="alert-heading mb-1">Correction Requested</h5>
+                    <p class="mb-0" th:text="${latestCorrectionReason != null ? latestCorrectionReason : 'Staff has requested a correction on your application.'}">Reason</p>
+                </div>
+                <div>
+                    <a th:href="@{'/student/applications/' + ${application.id} + '/resubmit'}" class="btn btn-warning text-dark fw-semibold">Resubmit Application</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Application Overview</h5>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <small class="text-muted d-block">Service</small>
+                        <strong th:text="${application.service.name}">ID Card</strong>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <small class="text-muted d-block">Current Stage</small>
+                        <strong th:text="${application.currentStage != null ? application.currentStage.name : 'Completed'}">Document verification</strong>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <small class="text-muted d-block">Department</small>
+                        <span th:text="${application.currentStage != null && application.currentStage.department != null ? application.currentStage.department : 'All Departments'}">-</span>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <small class="text-muted d-block">Submitted On</small>
+                        <span th:text="${#temporals.format(application.submittedAt, 'dd MMM yyyy, HH:mm')}">01 Jan 2026, 10:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Uploaded documents card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Uploaded Documents</h5>
+                <div th:if="${#lists.isEmpty(documents)}" class="text-muted">
+                    No documents uploaded for this application.
+                </div>
+                <div th:unless="${#lists.isEmpty(documents)}" class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Checklist Item</th>
+                                <th>File Name</th>
+                                <th>Size</th>
+                                <th>Uploaded</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="doc : ${documents}">
+                                <td th:text="${doc.requiredDocument != null ? doc.requiredDocument.documentName : 'Attached Document'}">Checklist Item</td>
+                                <td th:text="${doc.fileName}">file.pdf</td>
+                                <td th:text="${#numbers.formatDecimal(doc.fileSize / 1024.0, 1, 1) + ' KB'}">120 KB</td>
+                                <td th:text="${#temporals.format(doc.uploadedAt, 'dd MMM yyyy, HH:mm')}">01 Jan 2026</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decision history timeline card -->
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Decision History</h5>
+                <div th:if="${#lists.isEmpty(history)}" class="text-muted">
+                    No review decisions recorded yet.
+                </div>
+                <div th:unless="${#lists.isEmpty(history)}" class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Officer</th>
+                                <th>Stage</th>
+                                <th>Decision</th>
+                                <th>Reason / Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="h : ${history}">
+                                <td th:text="${#temporals.format(h.decidedAt, 'dd MMM yyyy, HH:mm')}">01 Jan 2026, 11:00</td>
+                                <td th:text="${h.officer.name}">Officer Name</td>
+                                <td th:text="${h.stage != null ? h.stage.name : '-'}">Stage</td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${h.decision.name() == 'APPROVED' or h.decision.name() == 'PROCESSED'} ? 'bg-success' :
+                                                    (${h.decision.name() == 'REJECTED'} ? 'bg-danger' :
+                                                    (${h.decision.name() == 'CORRECTION_REQUESTED'} ? 'bg-warning text-dark' :
+                                                    (${h.decision.name() == 'VERIFIED'} ? 'bg-info text-dark' : 'bg-secondary')))"
+                                          th:text="${h.decision.name().replace('_', ' ')}">APPROVED</span>
+                                </td>
+                                <td th:text="${h.reason != null && !#strings.isEmpty(h.reason) ? h.reason : '-'}">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>
