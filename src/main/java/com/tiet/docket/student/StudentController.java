@@ -11,17 +11,21 @@ import com.tiet.docket.model.Application;
 import com.tiet.docket.model.User;
 import com.tiet.docket.repository.ApplicationRepository;
 import com.tiet.docket.repository.UserRepository;
+import com.tiet.docket.workflow.NotificationService;
 
 @Controller
 public class StudentController {
 
     private final UserRepository userRepository;
     private final ApplicationRepository applicationRepository;
+    private final NotificationService notificationService;
 
     public StudentController(UserRepository userRepository,
-            ApplicationRepository applicationRepository) {
+                             ApplicationRepository applicationRepository,
+                             NotificationService notificationService) {
         this.userRepository = userRepository;
         this.applicationRepository = applicationRepository;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/student/dashboard")
@@ -32,9 +36,11 @@ public class StudentController {
                 .orElseThrow(() -> new IllegalStateException("Logged-in user not found"));
 
         List<Application> applications = applicationRepository.findByStudentOrderBySubmittedAtDesc(student);
+        long unreadCount = notificationService.countUnread(student);
 
         model.addAttribute("studentName", student.getName());
         model.addAttribute("applications", applications);
+        model.addAttribute("unreadCount", unreadCount);
         return "student/dashboard";
     }
 }
