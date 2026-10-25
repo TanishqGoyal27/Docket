@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Docket Admin · Edit Stage</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div th:replace="~{admin/navbar :: navbar('services')}"></div>
+
+<main class="container pb-5" style="max-width: 720px;">
+    <!-- Feedback Alerts -->
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${error}">Error message</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <div class="mb-4">
+        <a th:href="@{/admin/services/{id}(id=${service.id})}" class="text-decoration-none small text-secondary">
+            &larr; Back to <span th:text="${service.name}">Service</span>
+        </a>
+        <h1 class="h3 fw-bold mt-2 mb-1">Edit Workflow Stage</h1>
+        <p class="text-secondary mb-0">Modify the stage label, handling role, or departmental scope.</p>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <form th:action="@{/admin/services/{serviceId}/stages/{stageId}/edit(serviceId=${service.id}, stageId=${stage.id})}" method="post">
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Service</label>
+                        <input type="text" class="form-control bg-light" th:value="${service.name}" readonly disabled>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Step Order</label>
+                        <input type="text" class="form-control bg-light" th:value="'Step ' + ${stage.stepOrder}" readonly disabled>
+                        <div class="form-text">Step order is fixed to protect in-flight applications.</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="name" class="form-label">Stage Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name" th:value="${stage.name}" required>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6">
+                        <label for="handlerRole" class="form-label">Handling Role <span class="text-danger">*</span></label>
+                        <select class="form-select" id="handlerRole" name="handlerRole" required>
+                            <option th:each="r : ${roles}" th:value="${r}" th:text="${r.name()}"
+                                    th:selected="${r == stage.handlerRole}">ROLE</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="department" class="form-label">Department</label>
+                        <input type="text" class="form-control" id="department" name="department" th:value="${stage.department}" placeholder="Leave blank for any department">
+                        <div class="form-text">Optional: restricts review to officers of this department.</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a th:href="@{/admin/services/{id}(id=${service.id})}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
