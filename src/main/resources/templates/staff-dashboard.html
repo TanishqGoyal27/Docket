@@ -12,7 +12,8 @@
 
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
-            <span class="navbar-brand">Docket | Staff Portal</span>
+            <a class="navbar-brand" th:href="@{/staff/dashboard}">Docket | Staff Portal</a>
+            <!-- TODO: notification bell with unread count goes here -->
         </div>
     </nav>
 
@@ -24,13 +25,11 @@
             <div class="card-body">
                 <p class="text-secondary mb-2">Pending Applications</p>
                 <p class="display-5 fw-bold" th:text="${pendingCount}">3</p>
-                <a th:href="@{/staff/queue}" class="btn btn-primary">
-                    View Pending Queue
-                </a>
+                <a th:href="@{/staff/queue}" class="btn btn-primary">View Pending Queue</a>
             </div>
         </div>
 
-        <!-- TODO: Replace sample count with WorkflowService data. -->
+        <!-- TODO: replace sample count with WorkflowService data -->
     </main>
 
 </body>
