@@ -1,0 +1,75 @@
+.portal-hero {
+    background: linear-gradient(135deg, #0d6efd 0%, #4b2fd1 100%);
+    color: #fff;
+    padding: 4rem 0 6rem;
+}
+
+.portal-hero .brand-pill {
+    display: inline-block;
+    background: rgba(255, 255, 255, .18);
+    border-radius: 999px;
+    padding: .3rem 1rem;
+    font-size: .85rem;
+    letter-spacing: .05em;
+}
+
+.portal-cards {
+    margin-top: -3.5rem;
+}
+
+.role-card {
+    display: block;
+    height: 100%;
+    background: #fff;
+    border: 0;
+    border-top: 4px solid var(--accent);
+    border-radius: 14px;
+    padding: 1.5rem;
+    color: inherit;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.role-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, .15);
+    color: inherit;
+}
+
+.role-card .role-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--accent) 14%, white);
+    margin-bottom: 1rem;
+}
+
+.role-card .role-cta {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.role-card.approval {
+    --accent: #198754;
+}
+
+.role-card.finance {
+    --accent: #e8590c;
+}
+
+.role-card.admin {
+    --accent: #6f42c1;
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: .4rem;
+}
