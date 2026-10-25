@@ -8,7 +8,6 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
-import com.tiet.docket.model.User;
 import com.tiet.docket.repository.UserRepository;
 
 import jakarta.servlet.ServletException;
@@ -51,7 +50,8 @@ public class LoginFailureHandler extends SimpleUrlAuthenticationFailureHandler {
             });
         }
 
-        // If the account is locked, redirect to /login?locked; otherwise redirect to /login?error
+        // If the account is locked, redirect to /login?locked; otherwise redirect to
+        // /login?error
         if (exception instanceof LockedException) {
             setDefaultFailureUrl("/login?locked");
         } else {
