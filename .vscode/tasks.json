@@ -1,0 +1,73 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Stop Docket",
+            "type": "shell",
+            "command": "Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }; exit 0",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Open in Browser",
+            "type": "shell",
+            "command": "if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinśue) { Start-Process 'http://localhost:8080/login' } else { Write-Host 'Waiting for Docket on port 8080...'; while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/login' }",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Docket",
+            "type": "shell",
+            "command": "Start-Job -ScriptBlock { while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/login' } | Out-Null; $env:MAVEN_USER_HOME = 'C:\\maven-home'; .\\mvnw spring-boot:run '-Dmaven.repo.local=C:\\maven-home\\repository'",
+            "options": {
+                "env": {
+                    "MAVEN_USER_HOME": "C:\\maven-home"
+                }
+            },
+            "dependsOn": [
+                "Stop Docket"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*Starting DocketApplication.*",
+                    "endsPattern": ".*Started DocketApplication in.*"
+                }
+            }
+        },
+        {
+            "label": "Test Docket",
+            "type": "shell",
+            "command": "$env:MAVEN_USER_HOME = 'C:\\maven-home'; .\\mvnw test '-Dmaven.repo.local=C:\\maven-home\\repository'",
+            "options": {
+                "env": {
+                    "MAVEN_USER_HOME": "C:\\maven-home"
+                }
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
