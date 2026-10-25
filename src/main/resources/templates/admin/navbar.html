@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<nav th:fragment="navbar(activeTab)" class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-bold" th:href="@{/admin}">
+            <span class="me-1">⚙️</span> Docket <span class="badge bg-secondary ms-1 fw-normal">Admin</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar"
+                aria-controls="adminNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="adminNavbar">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${activeTab == 'dashboard'} ? 'active fw-bold' : ''"
+                       th:href="@{/admin}">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${activeTab == 'users'} ? 'active fw-bold' : ''"
+                       th:href="@{/admin/users}">Users</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${activeTab == 'services'} ? 'active fw-bold' : ''"
+                       th:href="@{/admin/services}">Services &amp; Stages</a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-light small" th:if="${currentAdmin != null}">
+                    Logged in as <strong th:text="${currentAdmin.name}">Administrator</strong>
+                </span>
+                <form th:action="@{/logout}" method="post" class="m-0">
+                    <button type="submit" class="btn btn-outline-light btn-sm">Log out</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+
+</body>
+</html>
