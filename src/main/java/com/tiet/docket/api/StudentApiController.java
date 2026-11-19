@@ -106,9 +106,11 @@ public class StudentApiController {
     @PostMapping("/applications/{id}/resubmit")
     public ApplicationSummary resubmit(@PathVariable Long id,
                                        @RequestParam(required = false) String note,
+                                       @RequestParam(required = false) String fields,
                                        MultipartHttpServletRequest request, Authentication auth) {
         User student = viewService.currentUser(auth);
-        return ApplicationSummary.of(submissionService.resubmit(student, id, note, request::getFile));
+        return ApplicationSummary.of(submissionService.resubmit(student, id, note,
+                fields == null ? null : parseFields(fields), request::getFile));
     }
 
     // ---------- application fee (payment gateway) ----------
@@ -122,6 +124,11 @@ public class StudentApiController {
     @PostMapping("/payments/sandbox/{orderId}/pay")
     public SandboxGateway.SimulatedPayment sandboxPay(@PathVariable String orderId, Authentication auth) {
         return paymentService.sandboxPay(orderId, viewService.currentUser(auth));
+    }
+
+    @PostMapping("/applications/{id}/payment/upi")
+    public ApplicationSummary payByUpi(@PathVariable Long id, @RequestBody ApiDtos.UpiPayment body, Authentication auth) {
+        return ApplicationSummary.of(paymentService.completeUpiPayment(id, viewService.currentUser(auth), body.utr()));
     }
 
     @PostMapping("/applications/{id}/payment/confirm")

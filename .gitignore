@@ -41,3 +41,6 @@ src/main/resources/static/
 
 ### Local database file ###
 data/
+
+### Private local settings (passwords, keys) ###
+docket-local.properties

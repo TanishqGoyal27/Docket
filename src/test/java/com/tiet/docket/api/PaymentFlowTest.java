@@ -120,6 +120,26 @@ class PaymentFlowTest {
     }
 
     @Test
+    void upiPaymentWithUtrSubmitsAndUtrCannotBeReused() throws Exception {
+        long id = applyForIdCard();
+        mvc.perform(post("/api/student/applications/" + id + "/payment/upi").with(csrf()).with(STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"utr\":\"12345\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/student/applications/" + id + "/payment/upi").with(csrf()).with(STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"utr\":\"432198765012\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+        mvc.perform(get("/api/staff/fees").with(FINANCE))
+                .andExpect(jsonPath("$[?(@.applicationId == " + id + ")].gateway").value("UPI"))
+                .andExpect(jsonPath("$[?(@.applicationId == " + id + ")].paymentId").value("432198765012"));
+
+        long second = applyForIdCard();
+        mvc.perform(post("/api/student/applications/" + second + "/payment/upi").with(csrf()).with(STUDENT)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"utr\":\"432198765012\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void receiptPdfIsAValidPdf() {
         String pdf = new String(ReceiptPdf.build("FEE RECEIPT", List.of("Amount (Rs. 200)")), StandardCharsets.ISO_8859_1);
         assertTrue(pdf.startsWith("%PDF-1.4"));

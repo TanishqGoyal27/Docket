@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { DECISION_LABELS, ROLE_LABELS, fieldLabel, formatDate, homePath, roleLabel, rupees } from '../labels.js';
+import { DECISION_LABELS, ROLE_LABELS, fieldLabel, fieldsFor, formatDate, homePath, roleLabel, rupees } from '../labels.js';
 import FileInput from '../components/FileInput.jsx';
+import { Field } from './student/Apply.jsx';
 import PaymentCheckout from '../components/PaymentCheckout.jsx';
 import { Alert, ErrorBox, Loading, PageHeader, StatusBadge, useApi } from '../components/ui.jsx';
 
@@ -14,6 +15,8 @@ export default function ApplicationPage() {
   const { user } = useAuth();
   const location = useLocation();
   const state = useApi(`/applications/${id}`);
+  // Show "submitted / paid" messages once; a reload should not repeat them
+  useEffect(() => { if (location.state) window.history.replaceState({}, ''); }, [location.state]);
   const d = state.data;
   const back = user.role === 'ADMINISTRATOR' ? '/admin/applications' : homePath(user.role);
 
@@ -149,9 +152,9 @@ function Documents({ d }) {
       ) : (
         <ul className="doc-list">
           {d.documents.map((doc) => (
-            <li key={doc.id}>
+            <li key={doc.id} className={doc.replaced ? 'replaced' : ''}>
               <div>
-                <strong>{doc.documentName}</strong>
+                <strong>{doc.documentName}{doc.replaced && <span className="badge status-closed"> Replaced</span>}</strong>
                 <span className="muted small">{doc.fileName} · {(doc.fileSize / 1024).toFixed(0)} KB · {formatDate(doc.uploadedAt)}</span>
               </div>
               <a className="btn btn-small" href={`/api/documents/${doc.id}`} target="_blank" rel="noreferrer">Open</a>
@@ -187,6 +190,10 @@ function Timeline({ d }) {
 
 // Student: fix what was asked and send it back (FR11, FR12)
 function ResubmitPanel({ d, onDone }) {
+  // The student's answers, editable; the teacher's details are locked once the teacher approved
+  const editable = fieldsFor(d.summary.serviceName).filter((f) => !f.key.startsWith('teacher'));
+  const [values, setValues] = useState(() =>
+    Object.fromEntries(editable.map((f) => [f.key, d.formData[f.key] || ''])));
   const [note, setNote] = useState('');
   const [files, setFiles] = useState({});
   const [fileError, setFileError] = useState(null);
@@ -200,6 +207,7 @@ function ResubmitPanel({ d, onDone }) {
     setError(null);
     const form = new FormData();
     if (note) form.append('note', note);
+    form.append('fields', JSON.stringify(values));
     Object.entries(files).forEach(([docId, f]) => f && form.append(`doc_${docId}`, f));
     try {
       await api(`/student/applications/${d.summary.id}/resubmit`, { method: 'POST', form });
@@ -214,9 +222,12 @@ function ResubmitPanel({ d, onDone }) {
   return (
     <form className="card action-card" onSubmit={submit}>
       <h3>Correct and resubmit</h3>
-      <p className="muted small">Upload replacement files where needed and explain what you changed.
-        Review continues at the same stage.</p>
+      <p className="muted small">Fix your answers, upload replacement files where needed and explain what you
+        changed. Review continues at the same stage, and the officer sees exactly what changed.</p>
       <ErrorBox error={error} />
+      {editable.map((f) => (
+        <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => setValues({ ...values, [f.key]: v })} />
+      ))}
       <label className="field">
         <span>{feeIssue ? 'Fee payment reference and what you changed' : 'What did you change?'}</span>
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)}
@@ -404,9 +415,9 @@ function FeeCard({ d }) {
       {f && (
         <dl className="facts single fee-facts">
           <div><dt>Receipt no.</dt><dd>{f.receiptNumber}</dd></div>
-          <div><dt>Payment ID</dt><dd><code>{f.paymentId}</code></dd></div>
+          <div><dt>{f.gateway === 'UPI' ? 'UTR' : 'Payment ID'}</dt><dd><code>{f.paymentId}</code></dd></div>
           <div><dt>Paid on</dt><dd>{formatDate(f.paidAt)}</dd></div>
-          <div><dt>Gateway</dt><dd>{f.gateway === 'SANDBOX' ? 'Docket Sandbox (test)' : 'Razorpay'}</dd></div>
+          <div><dt>Paid through</dt><dd>{f.gateway === 'UPI' ? 'UPI (UTR from student)' : f.gateway === 'SANDBOX' ? 'Docket Sandbox (test)' : 'Razorpay'}</dd></div>
           {f.verifiedBy && <div><dt>Checked by</dt><dd>{f.verifiedBy}, {formatDate(f.verifiedAt)}</dd></div>}
           {f.remark && <div><dt>Finance remark</dt><dd>{f.remark}</dd></div>}
         </dl>

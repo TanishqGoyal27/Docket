@@ -23,22 +23,25 @@ public class EmailService {
     private final ObjectProvider<JavaMailSender> mailSender;
     private final EmailLogRepository emailLogRepository;
     private final String from;
+    private final boolean enabled;
 
     public EmailService(ObjectProvider<JavaMailSender> mailSender, EmailLogRepository emailLogRepository,
-                        @Value("${spring.mail.username:}") String from) {
+                        @Value("${spring.mail.username:}") String from,
+                        @Value("${docket.mail.enabled:true}") boolean enabled) {
+        this.enabled = enabled;
         this.mailSender = mailSender;
         this.emailLogRepository = emailLogRepository;
         this.from = from.isBlank() ? "no-reply@docket.local" : from;
     }
 
     public boolean smtpConfigured() {
-        return mailSender.getIfAvailable() != null;
+        return enabled && mailSender.getIfAvailable() != null;
     }
 
     @Transactional
     public EmailLog send(String to, String subject, String body) {
         EmailLog log = new EmailLog(to, subject, body);
-        JavaMailSender sender = mailSender.getIfAvailable();
+        JavaMailSender sender = enabled ? mailSender.getIfAvailable() : null;
         if (sender == null) {
             log.setStatus(EmailLog.Status.NOT_SENT_NO_SMTP);
         } else {

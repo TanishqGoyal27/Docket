@@ -116,6 +116,16 @@ public class SubmissionService {
     @Transactional
     public Application resubmit(User student, Long applicationId, String note,
                                 Function<String, MultipartFile> files) {
+        return resubmit(student, applicationId, note, null, files);
+    }
+
+    /**
+     * Sends a returned application back to the same stage. The student may change their answers
+     * (fields, validated like a new submission) and replace documents; both show in the history.
+     */
+    @Transactional
+    public Application resubmit(User student, Long applicationId, String note, Map<String, String> fields,
+                                Function<String, MultipartFile> files) {
         Application app = applicationRepository.findById(applicationId)
                 .filter(a -> a.getStudent().getId().equals(student.getId()))
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
@@ -123,14 +133,43 @@ public class SubmissionService {
             throw new IllegalStateException("This application is not waiting for a correction");
         }
         List<String> errors = new ArrayList<>();
+        List<String> changes = new ArrayList<>();
+        if (fields != null) {
+            Map<String, String> before = readFormData(app.getFormData());
+            Map<String, String> merged = new LinkedHashMap<>(before);
+            // The teacher already approved these details, so they cannot change on a correction
+            fields.forEach((key, value) -> {
+                if (!key.startsWith("teacher")) {
+                    merged.put(key, value);
+                }
+            });
+            Map<String, String> clean = validateFields(app.getService().getName(), merged, errors);
+            clean.forEach((key, value) -> {
+                if (!value.equals(before.get(key))) {
+                    changes.add(label(key) + ": " + before.getOrDefault(key, "(empty)") + " -> " + value);
+                }
+            });
+            if (errors.isEmpty()) {
+                app.setFormData(toJson(clean));
+            }
+        }
         // Replacement files are optional on resubmission; only the uploaded ones are checked
         Map<RequiredDocument, MultipartFile> uploads =
                 validateFiles(requiredDocumentRepository.findByService(app.getService()), files, false, errors);
         if (!errors.isEmpty()) {
             throw new ValidationException(errors);
         }
+        uploads.keySet().forEach(doc -> changes.add("Replaced " + doc.getDocumentName()));
         saveFiles(app, uploads);
-        return workflowService.resubmit(applicationId, student, note);
+
+        String fullNote = note == null || note.isBlank() ? "" : note.trim();
+        if (!changes.isEmpty()) {
+            fullNote += (fullNote.isEmpty() ? "" : "\n") + "Changes: " + String.join("; ", changes);
+        }
+        if (fullNote.length() > 1000) {   // DecisionHistory.reason column length
+            fullNote = fullNote.substring(0, 997) + "...";
+        }
+        return workflowService.resubmit(applicationId, student, fullNote);
     }
 
     private Map<String, String> validateFields(String serviceName, Map<String, String> fields, List<String> errors) {
@@ -188,7 +227,12 @@ public class SubmissionService {
     }
 
     private void saveFiles(Application application, Map<RequiredDocument, MultipartFile> uploads) {
+        List<ApplicationDocument> existing = applicationDocumentRepository.findByApplication(application);
         uploads.forEach((doc, file) -> {
+            // Older files for the same checklist item stay on record but are marked replaced
+            existing.stream()
+                    .filter(old -> old.getRequiredDocument() != null && old.getRequiredDocument().getId().equals(doc.getId()))
+                    .forEach(old -> old.setReplaced(true));
             ApplicationDocument appDoc = new ApplicationDocument();
             appDoc.setApplication(application);
             appDoc.setRequiredDocument(doc);
@@ -202,6 +246,14 @@ public class SubmissionService {
             appDoc.setFileSize(file.getSize());
             applicationDocumentRepository.save(appDoc);
         });
+    }
+
+    private Map<String, String> readFormData(String json) {
+        Map<String, String> data = new LinkedHashMap<>();
+        if (json != null && !json.isBlank()) {
+            objectMapper.readTree(json).properties().forEach(e -> data.put(e.getKey(), e.getValue().asText()));
+        }
+        return data;
     }
 
     private String toJson(Map<String, String> data) {

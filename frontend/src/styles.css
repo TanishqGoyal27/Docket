@@ -347,3 +347,19 @@ a.stat:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
 .teacher-main .card h3 { margin-top: 0.5rem; }
 .mail { margin-bottom: 0.9rem; }
 .mail-body { white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 0.9rem; margin: 0.75rem 0 0; overflow-wrap: anywhere; }
+
+.doc-list li.replaced { opacity: 0.55; }
+.doc-list li.replaced .badge { margin-left: 0.4rem; }
+
+/* ---------- UPI checkout ---------- */
+.pay-tabs { display: flex; border-bottom: 2px solid var(--border); margin: 0.75rem 0 1rem; }
+.pay-tabs button { flex: 1; background: transparent; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 0.6rem; font: inherit; font-weight: 600; font-size: 0.86rem; color: var(--muted); cursor: pointer; }
+.pay-tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
+.upi-box { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+.upi-box img { border: 1px solid var(--border); border-radius: 6px; flex-shrink: 0; }
+.upi-steps { margin: 0 0 0.6rem; padding-left: 1.1rem; font-size: 0.82rem; display: grid; gap: 0.25rem; }
+.upi-id { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.upi-id code { font-size: 0.9rem; padding: 0.3rem 0.5rem; }
+.upi-open { width: fit-content; }
+.pay-warning { background: var(--warn-soft); border: 1px solid #ffda6a; color: var(--warn); border-radius: var(--radius); padding: 0.5rem 0.7rem; font-size: 0.8rem; }
+@media (max-width: 480px) { .upi-box { flex-direction: column; align-items: center; } }

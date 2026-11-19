@@ -95,13 +95,32 @@ set DOCKET_TEACHER_EMAIL_DOMAIN=thapar.edu
 
 `DOCKET_TEACHER_EMAIL_DOMAIN` stops students from entering a non-college address they control.
 
+## Private settings (email, UPI, Razorpay)
+
+Copy `docket-local.properties.example` to `docket-local.properties` (next to `pom.xml`) and fill in your
+values. Git ignores that file, so passwords and keys never reach GitHub. Restart the app after editing it.
+
+- **Email:** a Gmail address plus a Gmail *App Password* (Google Account > Security > App passwords).
+  Without it, emails only go to Administrator > Email Outbox.
+- **UPI:** the institute's real UPI ID (`docket.payment.upi-id`). Without it a demo ID is shown that UPI apps refuse.
+
+## Database
+
+- H2 (open source), stored in the file `data/docketdb.mv.db` inside the project folder on this computer.
+- Holds users (passwords BCrypt-hashed, never plain text), applications, decisions, payments, the change log,
+  emails and the uploaded files themselves.
+- Not encrypted on disk and uses the default H2 login, which is fine for a project demo on your own computer
+  but not for real student data; see the security notes in the project report before any real deployment.
+- Delete the `data/` folder (with the app stopped) to start again from the seed data.
+
 ## Application fee and payment gateway
 
 Services with a fee (set by the Administrator per service) are paid online while applying:
 
 1. The student fills the form, uploads documents and clicks **Save and pay**. The application is saved as
    *Payment pending* and is **not submitted** yet.
-2. The gateway checkout opens. After payment the server checks the gateway's signature
+2. The checkout opens with two options: **UPI** (QR code / UPI ID; the student then enters the 12-digit
+   UTR from their UPI app) or **Card / Netbanking** (gateway). For the gateway, the server the server checks the gateway's signature
    (`HMAC-SHA256(orderId|paymentId, secret)`), generates a **fee receipt PDF** (stored in the database) and
    submits the application.
 3. The **Administrative Officer** reviews the documents (the fee receipt is hidden from them). In parallel the

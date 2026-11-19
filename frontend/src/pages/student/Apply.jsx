@@ -126,7 +126,7 @@ export default function Apply() {
   );
 }
 
-function Field({ field, required, value, onChange, hint }) {
+export function Field({ field, required, value, onChange, hint }) {
   const common = { value, required, onChange: (e) => onChange(e.target.value) };
   return (
     <label className="field">

@@ -30,7 +30,7 @@ export default function FeeVerification() {
           <div className="table-wrap card">
             <table>
               <thead>
-                <tr><th>Application</th><th>Student</th><th>Service</th><th>Amount</th><th>Payment ID</th>
+                <tr><th>Application</th><th>Student</th><th>Service</th><th>Amount</th><th>Method</th><th>Payment ID / UTR</th>
                   <th>Receipt</th><th>Paid on</th><th>Verification</th></tr>
               </thead>
               <tbody>
@@ -40,6 +40,7 @@ export default function FeeVerification() {
                     <td>{f.studentName}</td>
                     <td>{f.serviceName}</td>
                     <td className="nowrap">{rupees(f.amount)}</td>
+                    <td>{f.gateway === 'UPI' ? 'UPI' : f.gateway === 'SANDBOX' ? 'Sandbox' : 'Razorpay'}</td>
                     <td><code>{f.paymentId}</code></td>
                     <td className="nowrap">{f.receiptNumber}</td>
                     <td className="nowrap">{formatDate(f.paidAt)}</td>

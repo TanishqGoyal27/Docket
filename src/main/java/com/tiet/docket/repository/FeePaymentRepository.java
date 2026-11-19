@@ -10,6 +10,7 @@ import java.util.Optional;
 public interface FeePaymentRepository extends JpaRepository<FeePayment, Long> {
     Optional<FeePayment> findByApplication(Application application);
     Optional<FeePayment> findByOrderId(String orderId);
+    boolean existsByPaymentId(String paymentId);
     boolean existsByApplicationAndVerification(Application application, FeePayment.Verification verification);
 
     // Finance cross-check list: every completed payment, newest first

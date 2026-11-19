@@ -81,12 +81,12 @@ public final class ApiDtos {
     }
 
     public record DocumentDto(Long id, String documentName, String fileName, String fileType, long fileSize,
-                              LocalDateTime uploadedAt, boolean feeReceipt) {
+                              LocalDateTime uploadedAt, boolean feeReceipt, boolean replaced) {
         public static DocumentDto of(ApplicationDocument d) {
             String name = d.isFeeReceipt() ? "Fee receipt (system generated)"
                     : d.getRequiredDocument() == null ? "Attached document" : d.getRequiredDocument().getDocumentName();
             return new DocumentDto(d.getId(), name, d.getFileName(), d.getFileType(), d.getFileSize(),
-                    d.getUploadedAt(), d.isFeeReceipt());
+                    d.getUploadedAt(), d.isFeeReceipt(), d.isReplaced());
         }
     }
 
@@ -198,6 +198,8 @@ public final class ApiDtos {
     public record PaymentConfirmation(String orderId, String paymentId, String signature) {}
 
     public record FeeCheckRequest(Boolean found, String remark) {}
+
+    public record UpiPayment(String utr) {}
 
     public record BookingRequest(LocalDateTime slot) {}
 
