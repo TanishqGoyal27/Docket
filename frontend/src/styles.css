@@ -1,11 +1,11 @@
-/* Styled after Thapar LMS (Moodle): maroon sidebar, white top bar with a big wordmark,
+/* Docket theme: Thapar maroon, a maroon sidebar, a white top bar with the Docket logo,
    Poppins, light grey page, white cards with a maroon rule. Light theme only. */
 :root {
   --brand: #930002;          /* Thapar maroon */
   --brand-dark: #7a0012;
   --brand-sidebar: #8b0016;
   --brand-soft: #fbeaea;
-  --blue: #1f5f8b;           /* wordmark blue */
+  --blue: #1f5f8b;           /* secondary accent (links, steps) */
   --blue-soft: #e7f0f7;
   --bg: #f1f1f1;
   --surface: #ffffff;
@@ -53,13 +53,14 @@ code { font-family: Consolas, "Courier New", monospace; font-size: 0.85em; backg
 .skip-link { position: absolute; left: -9999px; top: 0; background: #fff; color: var(--brand); padding: 0.5rem 1rem; z-index: 100; font-weight: 600; }
 .skip-link:focus { left: 8px; top: 8px; }
 
-/* ---------- wordmark ---------- */
-.wordmark { font-family: Oswald, "Arial Narrow", Impact, sans-serif; font-weight: 700; letter-spacing: 0.01em; line-height: 1; display: inline-flex; align-items: flex-end; }
-.wm-red { color: var(--brand); }
-.wm-blue { color: var(--blue); position: relative; }
-.wm-cap { position: absolute; left: -0.18em; top: -0.42em; width: 0.62em; }
-.wordmark-normal { font-size: 2.6rem; padding-top: 0.35rem; }
-.wordmark-large { font-size: 5rem; padding-top: 1rem; }
+/* ---------- logo ---------- */
+.logo { display: inline-flex; align-items: center; gap: 0.6rem; line-height: 1; }
+.logo-mark { width: 2.4rem; height: 2.4rem; flex-shrink: 0; }
+.logo-text { font-family: Poppins, "Segoe UI", sans-serif; font-weight: 700; font-size: 1.75rem; letter-spacing: -0.02em; color: var(--brand); }
+.logo-large .logo-mark { width: 4.5rem; height: 4.5rem; }
+.logo-large { gap: 1rem; }
+.logo-large .logo-text { font-size: 3.6rem; }
+.logo-light .logo-text { color: #fff; }
 
 /* ---------- app shell: sidebar + top bar ---------- */
 .app { min-height: 100vh; }
@@ -103,8 +104,6 @@ code { font-family: Consolas, "Courier New", monospace; font-size: 0.85em; backg
     repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 22px),
     radial-gradient(120% 90% at 0% 0%, #b3141f 0%, #930002 45%, #5c0010 100%); }
 .split-brand::after { content: ""; position: absolute; right: -120px; bottom: -120px; width: 360px; height: 360px; border-radius: 50%; border: 40px solid rgba(255,255,255,0.06); }
-.wordmark-light .wm-red { color: #fff; }
-.wordmark-light .wm-blue { color: #f6c9cc; }
 .split-tagline { font-size: 1.9rem; font-weight: 300; line-height: 1.25; margin: 1.5rem 0 0.4rem; max-width: 18ch; }
 .split-sub { font-size: 0.85rem; opacity: 0.8; margin-bottom: 2rem; }
 .split-features { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; max-width: 440px; }
@@ -319,13 +318,13 @@ a.stat:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
   .detail-grid, .split { grid-template-columns: 1fr; }
   .split-brand { padding: 2rem 1.25rem; }
   .split-features, .split-stats { display: none; }
-  .wordmark-large { font-size: 3.4rem; }
+  .logo-large .logo-text { font-size: 2.8rem; }
 }
 @media (max-width: 640px) {
   :root { --side: 56px; }
   .topbar { padding: 0 0.75rem; height: 60px; }
-  .wordmark-normal { font-size: 1.9rem; }
-  .wordmark-large { font-size: 2.6rem; }
+  .logo-text { font-size: 1.4rem; }
+  .logo-mark { width: 2rem; height: 2rem; }
   .split-tagline { font-size: 1.4rem; }
   .tile-grid { grid-template-columns: 1fr; }
   .main { padding: 1rem 0.75rem 2rem; }
