@@ -1,19 +1,19 @@
-// Shared look: Thapar maroon accents, Poppins, Docket wordmark.
+// Shared look: maroon accents, Poppins, Docket logo.
 
-// "DOCKET" wordmark: maroon and blue, with a small mortarboard over the K
+// Docket logo: a badge holding a filed document with a tick, then the name.
+// `light` is for dark backgrounds (white badge, white text).
 export function Wordmark({ size = 'normal', light = false }) {
-  const capColor = light ? '#ffffff' : '#930002';
+  const badge = light ? '#ffffff' : '#930002';
+  const ink = light ? '#930002' : '#ffffff';
   return (
-    <span className={`wordmark wordmark-${size} ${light ? 'wordmark-light' : ''}`} aria-label="Docket">
-      <span className="wm-red">DOC</span>
-      <span className="wm-blue">
-        <svg className="wm-cap" viewBox="0 0 40 24" aria-hidden="true">
-          <path d="M20 2 2 9l18 7 18-7z" fill={capColor} />
-          <path d="M9 12v6c3 3 19 3 22 0v-6l-11 4z" fill={capColor} />
-          <path d="M36 9v8" stroke={capColor} strokeWidth="1.6" />
-        </svg>
-        KET
-      </span>
+    <span className={`logo logo-${size} ${light ? 'logo-light' : ''}`} aria-label="Docket">
+      <svg className="logo-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <rect width="48" height="48" rx="12" fill={badge} />
+        <path d="M15 10h13l7 7v21a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z" fill={ink} />
+        <path d="M28 10v7h7" fill="none" stroke={badge} strokeWidth="2" strokeLinejoin="round" />
+        <path d="M18.5 28.5l4 4 7.5-8" fill="none" stroke={badge} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="logo-text">Docket</span>
     </span>
   );
 }
