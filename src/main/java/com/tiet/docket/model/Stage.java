@@ -26,6 +26,10 @@ public class Stage {
 
     private String department;           // optional, narrows it down
 
+    // An optional stage is used only when the previous officer chooses to forward to it
+    // (e.g. Finance review of a scholarship "where required")
+    private boolean optional = false;
+
     public Stage() {}
 
     public Long getId() { return id; }
@@ -45,4 +49,7 @@ public class Stage {
 
     public String getDepartment() { return department; }
     public void setDepartment(String department) { this.department = department; }
+
+    public boolean isOptional() { return optional; }
+    public void setOptional(boolean optional) { this.optional = optional; }
 }

@@ -18,4 +18,7 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     List<Application> findByCurrentStage_HandlerRoleAndStatusIn(Role role, List<ApplicationStatus> statuses);
 
     Optional<Application> findByReferenceNumber(String referenceNumber);
+
+    // Administrator overview of every application
+    List<Application> findAllByOrderBySubmittedAtDesc();
 }

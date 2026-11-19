@@ -14,7 +14,7 @@
         {
             "label": "Open in Browser",
             "type": "shell",
-            "command": "if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinśue) { Start-Process 'http://localhost:8080/login' } else { Write-Host 'Waiting for Docket on port 8080...'; while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/login' }",
+            "command": "if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) { Start-Process 'http://localhost:8080/' } else { Write-Host 'Waiting for Docket on port 8080...'; while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/' }",
             "presentation": {
                 "reveal": "silent",
                 "panel": "shared"
@@ -24,7 +24,7 @@
         {
             "label": "Run Docket",
             "type": "shell",
-            "command": "Start-Job -ScriptBlock { while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/login' } | Out-Null; $env:MAVEN_USER_HOME = 'C:\\maven-home'; .\\mvnw spring-boot:run '-Dmaven.repo.local=C:\\maven-home\\repository'",
+            "command": "Start-Job -ScriptBlock { while (-not (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue)) { Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8080/' } | Out-Null; $env:MAVEN_USER_HOME = 'C:\\maven-home'; .\\mvnw spring-boot:run '-Dmaven.repo.local=C:\\maven-home\\repository'",
             "options": {
                 "env": {
                     "MAVEN_USER_HOME": "C:\\maven-home"

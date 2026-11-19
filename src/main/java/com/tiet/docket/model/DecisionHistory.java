@@ -19,9 +19,12 @@ public class DecisionHistory {
     @JoinColumn(name = "stage_id", updatable = false)
     private Stage stage;                 // the step the decision was made at
 
-    @ManyToOne(optional = false)
+    @ManyToOne
     @JoinColumn(name = "officer_id", updatable = false)
-    private User officer;                // who decided
+    private User officer;                // who decided (empty for an email approval)
+
+    @Column(updatable = false)
+    private String externalActor;        // e.g. "Dr. A. Sharma (a.sharma@thapar.edu)" for a teacher's email approval
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false)
@@ -47,6 +50,9 @@ public class DecisionHistory {
 
     public Stage getStage() { return stage; }
     public void setStage(Stage stage) { this.stage = stage; }
+
+    public String getExternalActor() { return externalActor; }
+    public void setExternalActor(String externalActor) { this.externalActor = externalActor; }
 
     public User getOfficer() { return officer; }
     public void setOfficer(User officer) { this.officer = officer; }

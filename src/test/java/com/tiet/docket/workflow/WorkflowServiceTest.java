@@ -3,12 +3,14 @@ package com.tiet.docket.workflow;
 import com.tiet.docket.model.Application;
 import com.tiet.docket.model.ApplicationStatus;
 import com.tiet.docket.model.DecisionType;
+import com.tiet.docket.model.FeePayment;
 import com.tiet.docket.model.PaymentRecord;
 import com.tiet.docket.model.Role;
 import com.tiet.docket.model.Service;
 import com.tiet.docket.model.User;
 import com.tiet.docket.repository.ApplicationRepository;
 import com.tiet.docket.repository.DecisionHistoryRepository;
+import com.tiet.docket.repository.FeePaymentRepository;
 import com.tiet.docket.repository.PaymentRecordRepository;
 import com.tiet.docket.repository.ServiceRepository;
 import com.tiet.docket.repository.UserRepository;
@@ -33,6 +35,7 @@ class WorkflowServiceTest {
     @Autowired private ApplicationRepository applicationRepository;
     @Autowired private DecisionHistoryRepository decisionHistoryRepository;
     @Autowired private PaymentRecordRepository paymentRecordRepository;
+    @Autowired private FeePaymentRepository feePaymentRepository;
 
     private User student;
     private User otherStudent;
@@ -54,6 +57,8 @@ class WorkflowServiceTest {
         hod             = createUser("test-hod@docket.com", Role.HOD);
         accountsOfficer = createUser("test-accounts@docket.com", Role.ACCOUNTS_OFFICER);
         administrator   = createUser("test-admin-role@docket.com", Role.ADMINISTRATOR);
+        // These tests drive the stages directly; the teacher's email step is tested in SupervisorApprovalTest
+        serviceRepository.findByName("Reimbursement").orElseThrow().setRequiresSupervisorApproval(false);
     }
 
     // ----------------------------------------------------------------
@@ -71,36 +76,34 @@ class WorkflowServiceTest {
     }
 
     // ----------------------------------------------------------------
-    // 2. ID Card: the full happy path through all 3 stages
+    // 2. ID Card: the final approval waits for Finance to confirm the fee (parallel check)
     // ----------------------------------------------------------------
     @Test
-    void idCardMovesThroughAllStagesAndEndsApproved() {
+    void idCardFinalApprovalWaitsForFinanceFeeConfirmation() {
         Application app = submitApplication("ID Card");
+        Long id = app.getId();
 
-        app = workflowService.approve(app.getId(), adminOfficer);     // stage 1 -> 2
-        assertEquals(2, app.getCurrentStage().getStepOrder());
-        assertEquals(ApplicationStatus.UNDER_REVIEW, app.getStatus());
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> workflowService.approve(id, adminOfficer));
+        assertTrue(ex.getMessage().contains("not confirmed the fee"));
 
-        app = workflowService.approve(app.getId(), financeOfficer);   // stage 2 -> 3
-        assertEquals(3, app.getCurrentStage().getStepOrder());
-
-        app = workflowService.approve(app.getId(), adminOfficer);     // stage 3 -> done
+        confirmFee(app);
+        app = workflowService.approve(id, adminOfficer);
         assertEquals(ApplicationStatus.APPROVED, app.getStatus());
         assertNull(app.getCurrentStage());
 
-        // One history row per decision
-        assertEquals(3, decisionHistoryRepository
+        // One history row for the submission plus one for the decision
+        assertEquals(2, decisionHistoryRepository
                 .findByApplicationOrderByDecidedAtAsc(app).size());
     }
 
     // ----------------------------------------------------------------
-    // 3. Reimbursement: 4 stages, ends PROCESSED (not APPROVED)
+    // 3. Reimbursement: 3 staff stages, ends PROCESSED (not APPROVED)
     // ----------------------------------------------------------------
     @Test
     void reimbursementEndsProcessedAfterAccountsOfficer() {
         Application app = submitApplication("Reimbursement");
 
-        app = workflowService.approve(app.getId(), professor);
         app = workflowService.approve(app.getId(), hod);
         app = workflowService.approve(app.getId(), financeOfficer);
         app = workflowService.recordPaymentAndProcess(
@@ -114,7 +117,6 @@ class WorkflowServiceTest {
     void accountsOfficerCannotApproveWithoutPaymentRecord() {
         Application app = submitApplication("Reimbursement");
 
-        app = workflowService.approve(app.getId(), professor);
         app = workflowService.approve(app.getId(), hod);
         app = workflowService.approve(app.getId(), financeOfficer);
 
@@ -166,9 +168,10 @@ class WorkflowServiceTest {
         assertNull(app.getCurrentStage());
 
         var history = decisionHistoryRepository.findByApplicationOrderByDecidedAtAsc(app);
-        assertEquals(1, history.size());
-        assertEquals(DecisionType.REJECTED, history.get(0).getDecision());
-        assertEquals("Photo is not clear", history.get(0).getReason());
+        assertEquals(2, history.size());                       // SUBMITTED, REJECTED
+        assertEquals(DecisionType.SUBMITTED, history.get(0).getDecision());
+        assertEquals(DecisionType.REJECTED, history.get(1).getDecision());
+        assertEquals("Photo is not clear", history.get(1).getReason());
     }
 
     // ----------------------------------------------------------------
@@ -176,18 +179,18 @@ class WorkflowServiceTest {
     // ----------------------------------------------------------------
     @Test
     void correctionSendsBackToStudentAndKeepsSameStage() {
-        Application app = submitApplication("ID Card");
-        app = workflowService.approve(app.getId(), adminOfficer);   // now at stage 2 (finance)
+        Application app = submitApplication("Reimbursement");
+        // Reimbursement starts at the HOD (the teacher approves by email beforehand)
         Long stageBefore = app.getCurrentStage().getId();
 
-        app = workflowService.requestCorrection(app.getId(), financeOfficer, "Fee receipt missing");
+        app = workflowService.requestCorrection(app.getId(), hod, "Project letter missing");
         assertEquals(ApplicationStatus.AWAITING_CORRECTION, app.getStatus());
         assertEquals(stageBefore, app.getCurrentStage().getId());
 
         // Staff cannot act while the application waits for the student
         Long id = app.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(id, financeOfficer));
+                () -> workflowService.approve(id, hod));
 
         // Another student cannot resubmit it
         assertThrows(IllegalStateException.class,
@@ -236,7 +239,6 @@ class WorkflowServiceTest {
     void recordPaymentAndProcessSavesRecordAndEndsProcessed() {
         Application app = submitApplication("Reimbursement");
 
-        app = workflowService.approve(app.getId(), professor);
         app = workflowService.approve(app.getId(), hod);
         app = workflowService.approve(app.getId(), financeOfficer);
 
@@ -254,7 +256,7 @@ class WorkflowServiceTest {
         assertNotNull(record.getRecordedAt());
 
         var history = decisionHistoryRepository.findByApplicationOrderByDecidedAtAsc(app);
-        assertEquals(4, history.size());
+        assertEquals(4, history.size());                       // SUBMITTED + 3 stages
         assertEquals(DecisionType.PROCESSED, history.get(3).getDecision());
     }
 
@@ -262,7 +264,6 @@ class WorkflowServiceTest {
     void recordPaymentAndProcessRejectsBlankReferenceOrNullDate() {
         Application app = submitApplication("Reimbursement");
 
-        app = workflowService.approve(app.getId(), professor);
         app = workflowService.approve(app.getId(), hod);
         app = workflowService.approve(app.getId(), financeOfficer);
 
@@ -281,11 +282,10 @@ class WorkflowServiceTest {
     void nonAccountsOfficerCannotRecordPayment() {
         Application app = submitApplication("Reimbursement");
 
-        app = workflowService.approve(app.getId(), professor);
         app = workflowService.approve(app.getId(), hod);
         app = workflowService.approve(app.getId(), financeOfficer);
 
-        // At stage 4 (waiting for ACCOUNTS_OFFICER), finance officer tries to record payment
+        // At the last stage (waiting for ACCOUNTS_OFFICER), finance officer tries to record payment
         Long appId = app.getId();
         assertThrows(IllegalStateException.class,
                 () -> workflowService.recordPaymentAndProcess(appId, financeOfficer, "UTR-123", LocalDate.now()));
@@ -293,7 +293,7 @@ class WorkflowServiceTest {
 
     @Test
     void recordPaymentAndProcessFailsWhenNotAtPaymentStage() {
-        // Reimbursement is at stage 1 (Professor verification)
+        // Reimbursement is at stage 1 (HOD approval)
         Application app = submitApplication("Reimbursement");
         Long appId = app.getId();
         assertThrows(IllegalStateException.class,
@@ -319,8 +319,8 @@ class WorkflowServiceTest {
         assertEquals(ApplicationStatus.UNDER_REVIEW, app.getStatus());
         assertEquals(2, app.getCurrentStage().getStepOrder());
 
-        // Stage 2: Correction approval by ADMINISTRATOR (last stage)
-        app = workflowService.approve(app.getId(), administrator);
+        // Stage 2: Correction approval by ADMIN_OFFICER (last stage, SRS Appendix A point 4)
+        app = workflowService.approve(app.getId(), adminOfficer);
         assertEquals(ApplicationStatus.CLOSED, app.getStatus());
         assertNull(app.getCurrentStage());
 
@@ -328,8 +328,8 @@ class WorkflowServiceTest {
         assertEquals("9999999999", updatedStudent.getPhone());
 
         var history = decisionHistoryRepository.findByApplicationOrderByDecidedAtAsc(app);
-        assertEquals(2, history.size());
-        assertEquals(DecisionType.APPROVED, history.get(1).getDecision());
+        assertEquals(3, history.size());                       // SUBMITTED + 2 stages
+        assertEquals(DecisionType.APPROVED, history.get(2).getDecision());
     }
 
     @Test
@@ -338,7 +338,7 @@ class WorkflowServiceTest {
         Application app1 = submitApplication("Details Correction",
                 "{\"field\":\"name\",\"newValue\":\"New Student Name\"}");
         app1 = workflowService.approve(app1.getId(), adminOfficer);
-        app1 = workflowService.approve(app1.getId(), administrator);
+        app1 = workflowService.approve(app1.getId(), adminOfficer);
         assertEquals(ApplicationStatus.CLOSED, app1.getStatus());
         assertEquals("New Student Name", userRepository.findById(student.getId()).orElseThrow().getName());
 
@@ -346,7 +346,7 @@ class WorkflowServiceTest {
         Application app2 = submitApplication("Details Correction",
                 "{\"field\":\"course\",\"newValue\":\"B.Tech CSE\"}");
         app2 = workflowService.approve(app2.getId(), adminOfficer);
-        app2 = workflowService.approve(app2.getId(), administrator);
+        app2 = workflowService.approve(app2.getId(), adminOfficer);
         assertEquals(ApplicationStatus.CLOSED, app2.getStatus());
         assertEquals("B.Tech CSE", userRepository.findById(student.getId()).orElseThrow().getCourse());
 
@@ -354,7 +354,7 @@ class WorkflowServiceTest {
         Application app3 = submitApplication("Details Correction",
                 "{\"field\":\"rollNumber\",\"newValue\":\"10203040\"}");
         app3 = workflowService.approve(app3.getId(), adminOfficer);
-        app3 = workflowService.approve(app3.getId(), administrator);
+        app3 = workflowService.approve(app3.getId(), adminOfficer);
         assertEquals(ApplicationStatus.CLOSED, app3.getStatus());
         assertEquals("10203040", userRepository.findById(student.getId()).orElseThrow().getRollNumber());
     }
@@ -369,7 +369,7 @@ class WorkflowServiceTest {
 
         Long appId = app.getId();
         IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appId, administrator));
+                () -> workflowService.approve(appId, adminOfficer));
         assertTrue(ex.getMessage().contains("not allowed"));
 
         // Student's email remains unchanged
@@ -384,14 +384,14 @@ class WorkflowServiceTest {
         appNull = workflowService.approve(appNull.getId(), adminOfficer);
         Long appNullId = appNull.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appNullId, administrator));
+                () -> workflowService.approve(appNullId, adminOfficer));
 
         // Blank formData
         Application appBlank = submitApplication("Details Correction", "   ");
         appBlank = workflowService.approve(appBlank.getId(), adminOfficer);
         Long appBlankId = appBlank.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appBlankId, administrator));
+                () -> workflowService.approve(appBlankId, adminOfficer));
 
         // Blank newValue
         Application appBlankVal = submitApplication("Details Correction",
@@ -399,7 +399,7 @@ class WorkflowServiceTest {
         appBlankVal = workflowService.approve(appBlankVal.getId(), adminOfficer);
         Long appBlankValId = appBlankVal.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appBlankValId, administrator));
+                () -> workflowService.approve(appBlankValId, adminOfficer));
 
         // Missing field key
         Application appNoField = submitApplication("Details Correction",
@@ -407,7 +407,7 @@ class WorkflowServiceTest {
         appNoField = workflowService.approve(appNoField.getId(), adminOfficer);
         Long appNoFieldId = appNoField.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appNoFieldId, administrator));
+                () -> workflowService.approve(appNoFieldId, adminOfficer));
 
         // Missing newValue key
         Application appNoVal = submitApplication("Details Correction",
@@ -415,7 +415,78 @@ class WorkflowServiceTest {
         appNoVal = workflowService.approve(appNoVal.getId(), adminOfficer);
         Long appNoValId = appNoVal.getId();
         assertThrows(IllegalStateException.class,
-                () -> workflowService.approve(appNoValId, administrator));
+                () -> workflowService.approve(appNoValId, adminOfficer));
+    }
+
+    // ----------------------------------------------------------------
+    // Release 2 and SRS gap rules
+    // ----------------------------------------------------------------
+    @Test
+    void administratorCannotActOnAnyStage() {
+        Application app = submitApplication("Details Correction",
+                "{\"field\":\"phone\",\"newValue\":\"9999999999\"}");
+        Long id = workflowService.approve(app.getId(), adminOfficer).getId();
+        assertThrows(IllegalStateException.class, () -> workflowService.approve(id, administrator));
+    }
+
+    @Test
+    void documentVerificationStartsUnderReviewAndEndsVerified() {
+        Application app = submitApplication("Document Verification", "{\"documentType\":\"Degree\"}");
+        assertEquals(ApplicationStatus.UNDER_REVIEW, app.getStatus());
+        confirmFee(app);
+
+        app = workflowService.approve(app.getId(), adminOfficer);
+        assertEquals(ApplicationStatus.VERIFIED, app.getStatus());
+        var history = decisionHistoryRepository.findByApplicationOrderByDecidedAtAsc(app);
+        assertEquals(DecisionType.VERIFIED, history.get(history.size() - 1).getDecision());
+    }
+
+    @Test
+    void scholarshipSkipsOptionalFinanceStageWhenNotForwarded() {
+        User scholarshipOfficer = createUser("test-scholar@docket.com", Role.SCHOLARSHIP_OFFICER);
+        Application app = submitApplication("Scholarship Verification");
+
+        app = workflowService.approve(app.getId(), scholarshipOfficer, false);
+        assertEquals(ApplicationStatus.VERIFIED, app.getStatus());
+        assertNull(app.getCurrentStage());
+    }
+
+    @Test
+    void scholarshipForwardedGoesToFinanceThenVerified() {
+        User scholarshipOfficer = createUser("test-scholar@docket.com", Role.SCHOLARSHIP_OFFICER);
+        Application app = submitApplication("Scholarship Verification");
+
+        app = workflowService.approve(app.getId(), scholarshipOfficer, true);
+        assertEquals(Role.FINANCE_OFFICER, app.getCurrentStage().getHandlerRole());
+
+        app = workflowService.approve(app.getId(), financeOfficer);
+        assertEquals(ApplicationStatus.VERIFIED, app.getStatus());
+    }
+
+    @Test
+    void financeReturnIsRecordedAsIssueFoundAndResubmitNoteIsKept() {
+        Application app = submitApplication("Reimbursement");
+        app = workflowService.approve(app.getId(), hod);                    // -> bill verification
+        app = workflowService.requestCorrection(app.getId(), financeOfficer, "Fee not paid");
+        assertEquals(ApplicationStatus.AWAITING_CORRECTION, app.getStatus());
+
+        app = workflowService.resubmit(app.getId(), student, "Paid, receipt REF123");
+        assertEquals(Role.FINANCE_OFFICER, app.getCurrentStage().getHandlerRole());
+
+        var history = decisionHistoryRepository.findByApplicationOrderByDecidedAtAsc(app);
+        assertEquals(DecisionType.ISSUE_FOUND, history.get(history.size() - 2).getDecision());
+        assertEquals(DecisionType.RESUBMITTED, history.get(history.size() - 1).getDecision());
+        assertEquals("Paid, receipt REF123", history.get(history.size() - 1).getReason());
+    }
+
+    @Test
+    void queueHidesStagesOfOtherDepartments() {
+        Application app = submitApplication("Reimbursement");
+        app.getCurrentStage().setDepartment("Mechanical");
+        hod.setDepartment("Computer Science");
+
+        assertTrue(workflowService.getPendingFor(hod).stream()
+                .noneMatch(a -> a.getId().equals(app.getId())));
     }
 
     // ----------------------------------------------------------------
@@ -428,6 +499,17 @@ class WorkflowServiceTest {
         user.setPassword("not-a-real-password");   // login is not tested here
         user.setRole(role);
         return userRepository.save(user);
+    }
+
+    // Stands in for a paid fee that the Finance Officer has confirmed
+    private void confirmFee(Application app) {
+        FeePayment fee = new FeePayment();
+        fee.setApplication(app);
+        fee.setAmount(app.getService().getFeeAmount());
+        fee.setGateway("SANDBOX");
+        fee.setStatus(FeePayment.Status.PAID);
+        fee.setVerification(FeePayment.Verification.CONFIRMED);
+        feePaymentRepository.save(fee);
     }
 
     private Application submitApplication(String serviceName) {

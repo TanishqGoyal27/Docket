@@ -22,6 +22,19 @@ public class Service {
     @Column(name = "updates_student_record")
     private boolean updatesStudentRecord = false;
 
+    // Status given when the last stage approves: APPROVED, or VERIFIED for verification services
+    @Enumerated(EnumType.STRING)
+    private ApplicationStatus finalStatus = ApplicationStatus.APPROVED;
+
+    // True if an approved application needs an in-person visit slot (ID card collection)
+    private boolean requiresVisit = false;
+
+    // Application fee in rupees, paid online before the application is submitted (0 = free)
+    private int feeAmount = 0;
+
+    // The teacher named by the student must approve by email before staff see the application
+    private boolean requiresSupervisorApproval = false;
+
     public Service() {}
 
     public Long getId() { return id; }
@@ -38,4 +51,18 @@ public class Service {
 
     public boolean isUpdatesStudentRecord() { return updatesStudentRecord; }
     public void setUpdatesStudentRecord(boolean updatesStudentRecord) { this.updatesStudentRecord = updatesStudentRecord; }
+
+    public ApplicationStatus getFinalStatus() { return finalStatus == null ? ApplicationStatus.APPROVED : finalStatus; }
+    public void setFinalStatus(ApplicationStatus finalStatus) { this.finalStatus = finalStatus; }
+
+    public boolean isRequiresVisit() { return requiresVisit; }
+    public void setRequiresVisit(boolean requiresVisit) { this.requiresVisit = requiresVisit; }
+
+    public int getFeeAmount() { return feeAmount; }
+    public void setFeeAmount(int feeAmount) { this.feeAmount = feeAmount; }
+
+    public boolean isRequiresSupervisorApproval() { return requiresSupervisorApproval; }
+    public void setRequiresSupervisorApproval(boolean requiresSupervisorApproval) {
+        this.requiresSupervisorApproval = requiresSupervisorApproval;
+    }
 }

@@ -30,15 +30,15 @@ class RequiredDocumentSeedTest {
     @Autowired private WorkflowDataSeeder workflowDataSeeder;
 
     // ----------------------------------------------------------------
-    // 1. ID Card must have exactly 3 required documents
+    // 1. ID Card has 2 documents (the fee receipt is generated after online payment)
     // ----------------------------------------------------------------
     @Test
-    void idCardHasThreeRequiredDocuments() {
+    void idCardHasTwoRequiredDocuments() {
         com.tiet.docket.model.Service idCard =
                 serviceRepository.findByName("ID Card").orElseThrow();
         List<RequiredDocument> docs = requiredDocumentRepository.findByService(idCard);
-        assertEquals(3, docs.size(),
-                "ID Card should have exactly 3 required documents");
+        assertEquals(2, docs.size(),
+                "ID Card should have exactly 2 documents");
     }
 
     // ----------------------------------------------------------------
@@ -96,9 +96,9 @@ class RequiredDocumentSeedTest {
                 .anyMatch(d -> !d.isMandatory());
         assertTrue(hasOptional, "ID Card should have at least one optional document");
 
-        // The other two should be mandatory
+        // Only the photo is always mandatory (the FIR is required for a lost card)
         long mandatoryCount = docs.stream().filter(RequiredDocument::isMandatory).count();
-        assertEquals(2, mandatoryCount,
-                "ID Card should have exactly 2 mandatory documents");
+        assertEquals(1, mandatoryCount,
+                "ID Card should have exactly 1 mandatory document");
     }
 }

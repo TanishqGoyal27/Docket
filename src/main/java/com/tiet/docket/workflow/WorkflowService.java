@@ -4,14 +4,18 @@ import com.tiet.docket.model.Application;
 import com.tiet.docket.model.ApplicationStatus;
 import com.tiet.docket.model.DecisionHistory;
 import com.tiet.docket.model.DecisionType;
+import com.tiet.docket.model.FeePayment;
 import com.tiet.docket.model.PaymentRecord;
 import com.tiet.docket.model.Role;
 import com.tiet.docket.model.Stage;
+import com.tiet.docket.model.SupervisorApproval;
 import com.tiet.docket.model.User;
 import com.tiet.docket.repository.ApplicationRepository;
 import com.tiet.docket.repository.DecisionHistoryRepository;
+import com.tiet.docket.repository.FeePaymentRepository;
 import com.tiet.docket.repository.PaymentRecordRepository;
 import com.tiet.docket.repository.StageRepository;
+import com.tiet.docket.repository.SupervisorApprovalRepository;
 import com.tiet.docket.repository.UserRepository;
 import org.springframework.stereotype.Service;   // Spring's @Service, not our model.Service
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +35,9 @@ public class WorkflowService {
     private final NotificationService notificationService;
     private final PaymentRecordRepository paymentRecordRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
+    private final FeePaymentRepository feePaymentRepository;
+    private final SupervisorApprovalRepository supervisorApprovalRepository;
 
     // Repositories and notification service injected via constructor.
     // The six public method signatures are NOT changed.
@@ -39,13 +46,52 @@ public class WorkflowService {
                            DecisionHistoryRepository decisionHistoryRepository,
                            NotificationService notificationService,
                            PaymentRecordRepository paymentRecordRepository,
-                           UserRepository userRepository) {
+                           UserRepository userRepository,
+                           AuditService auditService,
+                           FeePaymentRepository feePaymentRepository,
+                           SupervisorApprovalRepository supervisorApprovalRepository) {
         this.applicationRepository = applicationRepository;
         this.stageRepository = stageRepository;
         this.decisionHistoryRepository = decisionHistoryRepository;
         this.notificationService = notificationService;
         this.paymentRecordRepository = paymentRecordRepository;
         this.userRepository = userRepository;
+        this.auditService = auditService;
+        this.feePaymentRepository = feePaymentRepository;
+        this.supervisorApprovalRepository = supervisorApprovalRepository;
+    }
+
+    // ---------------------------------------------------------------
+    // HOLD: submitted by the student, but waiting for the teacher's email approval
+    // before it reaches the first stage (SupervisorApprovalService releases it).
+    // ---------------------------------------------------------------
+    @Transactional
+    public Application holdForSupervisor(Application application) {
+        application.setCurrentStage(null);
+        application.setStatus(ApplicationStatus.SUPERVISOR_PENDING);
+        Application saved = applicationRepository.save(application);
+        saved.setReferenceNumber(String.format("DKT-%d-%04d", LocalDate.now().getYear(), saved.getId()));
+        saved = applicationRepository.save(saved);
+        recordDecision(saved, null, saved.getStudent(), DecisionType.SUBMITTED, null);
+        return saved;
+    }
+
+    // ---------------------------------------------------------------
+    // DRAFT: a service with a fee is saved first and submitted only after payment.
+    // ---------------------------------------------------------------
+    @Transactional
+    public Application saveDraft(Application application) {
+        application.setCurrentStage(null);
+        application.setStatus(ApplicationStatus.PAYMENT_PENDING);
+        Application saved = applicationRepository.save(application);
+        saved.setReferenceNumber(String.format("DKT-%d-%04d", LocalDate.now().getYear(), saved.getId()));
+        saved = applicationRepository.save(saved);
+
+        final Application draft = saved;
+        sendSafely(() -> notificationService.notifyUser(draft.getStudent(), draft,
+                "Application " + draft.getReferenceNumber() + " is saved. Pay the fee of Rs. "
+                        + draft.getService().getFeeAmount() + " to submit it."));
+        return saved;
     }
 
     // ---------------------------------------------------------------
@@ -58,14 +104,24 @@ public class WorkflowService {
         if (stages.isEmpty()) {
             throw new IllegalStateException("No stages are configured for this service");
         }
+        boolean releasedBySupervisor = application.getStatus() == ApplicationStatus.SUPERVISOR_PENDING;
+        if (application.getStatus() != null && application.getStatus() != ApplicationStatus.PAYMENT_PENDING
+                && !releasedBySupervisor && application.getId() != null) {
+            throw new IllegalStateException("This application has already been submitted");
+        }
         application.setCurrentStage(stages.get(0));
-        application.setStatus(ApplicationStatus.SUBMITTED);
+        // Verification services (UC-03, UC-05) start as "Under review" once validation passed
+        application.setStatus(application.getService().getFinalStatus() == ApplicationStatus.VERIFIED
+                ? ApplicationStatus.UNDER_REVIEW : ApplicationStatus.SUBMITTED);
         Application saved = applicationRepository.save(application);
 
         // Readable reference number, e.g. DKT-2026-0001 (needs the generated id)
         saved.setReferenceNumber(
                 String.format("DKT-%d-%04d", LocalDate.now().getYear(), saved.getId()));
         saved = applicationRepository.save(saved);
+        if (!releasedBySupervisor) {   // the submission was already recorded when it was held
+            recordDecision(saved, saved.getCurrentStage(), saved.getStudent(), DecisionType.SUBMITTED, null);
+        }
 
         // ---- Notifications ----
         // Java lambdas require captured variables to be final (or effectively final).
@@ -99,10 +155,22 @@ public class WorkflowService {
     // ---------------------------------------------------------------
     @Transactional
     public Application approve(Long applicationId, User officer) {
+        return approve(applicationId, officer, true);
+    }
+
+    // forward = false skips an optional next stage (e.g. scholarship does not need Finance)
+    @Transactional
+    public Application approve(Long applicationId, User officer, boolean forward) {
         Application app = findApplication(applicationId);
         checkOfficerCanAct(app, officer);
 
         Stage current = app.getCurrentStage();
+
+        // The teacher's email approval must be on record before any officer approves
+        if (app.getService().isRequiresSupervisorApproval() && !supervisorApprovalRepository
+                .existsByApplicationAndStatus(app, SupervisorApproval.Status.APPROVED)) {
+            throw new IllegalStateException("The supervising teacher has not approved this application yet");
+        }
 
         // Task 1D: Guard that accounts officer records payment before processing
         if (current.getHandlerRole() == Role.ACCOUNTS_OFFICER
@@ -110,12 +178,15 @@ public class WorkflowService {
             throw new IllegalStateException("Record the payment reference and date before processing");
         }
 
-        Optional<Stage> next = stageRepository.findByServiceAndStepOrder(
-                app.getService(), current.getStepOrder() + 1);
+        Optional<Stage> next = nextStage(current, forward);
+        // Finance and verification officers record "Verified" rather than "Approved" (SRS 1.3)
+        DecisionType passed = current.getHandlerRole() == Role.FINANCE_OFFICER
+                || app.getService().getFinalStatus() == ApplicationStatus.VERIFIED
+                ? DecisionType.VERIFIED : DecisionType.APPROVED;
 
         if (next.isPresent()) {
             // Moving to the next stage.
-            recordDecision(app, current, officer, DecisionType.APPROVED, null);
+            recordDecision(app, current, officer, passed, null);
             app.setCurrentStage(next.get());
             app.setStatus(ApplicationStatus.UNDER_REVIEW);
             Application saved = applicationRepository.save(app);
@@ -142,9 +213,16 @@ public class WorkflowService {
         } else {
             // Last stage: the application is finished.
 
+            // The fee is checked by Finance in parallel; no final decision before it is confirmed
+            if (app.getService().getFeeAmount() > 0 && !feePaymentRepository
+                    .existsByApplicationAndVerification(app, FeePayment.Verification.CONFIRMED)) {
+                throw new IllegalStateException(
+                        "The Finance Officer has not confirmed the fee payment yet. Approve after it is confirmed.");
+            }
+
             // Task 2D: If this service updates the student record (e.g. Details Correction)
             if (app.getService().isUpdatesStudentRecord()) {
-                applyStudentRecordChange(app);
+                applyStudentRecordChange(app, officer);
                 recordDecision(app, current, officer, DecisionType.APPROVED, null);
                 app.setCurrentStage(null);
                 app.setStatus(ApplicationStatus.CLOSED);
@@ -161,16 +239,18 @@ public class WorkflowService {
             }
 
             boolean paymentStage = current.getHandlerRole() == Role.ACCOUNTS_OFFICER;
+            ApplicationStatus finalStatus = paymentStage
+                    ? ApplicationStatus.PROCESSED : app.getService().getFinalStatus();
             recordDecision(app, current, officer,
-                    paymentStage ? DecisionType.PROCESSED : DecisionType.APPROVED, null);
+                    paymentStage ? DecisionType.PROCESSED : passed, null);
             app.setCurrentStage(null);
-            app.setStatus(paymentStage ? ApplicationStatus.PROCESSED : ApplicationStatus.APPROVED);
+            app.setStatus(finalStatus);
             Application saved = applicationRepository.save(app);
 
             // ---- Notifications ----
             String ref = saved.getReferenceNumber();
             // "processed" for ACCOUNTS_OFFICER final step, "approved" otherwise.
-            String outcome = paymentStage ? "processed" : "approved";
+            String outcome = finalStatus.name().toLowerCase();
             sendSafely(() ->
                 notificationService.notifyUser(
                     saved.getStudent(), saved,
@@ -263,8 +343,10 @@ public class WorkflowService {
         Application app = findApplication(applicationId);
         checkOfficerCanAct(app, officer);
 
+        // A Finance return is recorded as "Issue found" (unpaid fee / wrong bills)
         recordDecision(app, app.getCurrentStage(), officer,
-                DecisionType.CORRECTION_REQUESTED, message);
+                officer.getRole() == Role.FINANCE_OFFICER
+                        ? DecisionType.ISSUE_FOUND : DecisionType.CORRECTION_REQUESTED, message);
         app.setStatus(ApplicationStatus.AWAITING_CORRECTION);
         Application saved = applicationRepository.save(app);
 
@@ -283,6 +365,12 @@ public class WorkflowService {
     // ---------------------------------------------------------------
     @Transactional
     public Application resubmit(Long applicationId, User student) {
+        return resubmit(applicationId, student, null);
+    }
+
+    // note: what the student changed, e.g. the fee payment reference (FR12)
+    @Transactional
+    public Application resubmit(Long applicationId, User student, String note) {
         Application app = findApplication(applicationId);
 
         if (!app.getStudent().getId().equals(student.getId())) {
@@ -293,6 +381,8 @@ public class WorkflowService {
         }
         app.setStatus(ApplicationStatus.UNDER_REVIEW);
         Application saved = applicationRepository.save(app);
+        recordDecision(saved, saved.getCurrentStage(), student, DecisionType.RESUBMITTED,
+                note == null || note.isBlank() ? null : note.trim());
 
         // ---- Notification ----
         // Tell the current stage's officers that the student has resubmitted.
@@ -314,8 +404,30 @@ public class WorkflowService {
     @Transactional(readOnly = true)
     public List<Application> getPendingFor(User officer) {
         return applicationRepository.findByCurrentStage_HandlerRoleAndStatusIn(
-                officer.getRole(),
-                List.of(ApplicationStatus.SUBMITTED, ApplicationStatus.UNDER_REVIEW));
+                        officer.getRole(),
+                        List.of(ApplicationStatus.SUBMITTED, ApplicationStatus.UNDER_REVIEW))
+                .stream()
+                .filter(app -> inOfficerDepartment(app.getCurrentStage(), officer))
+                .toList();
+    }
+
+    // The stage after 'current', skipping an optional stage when the officer does not forward.
+    @Transactional(readOnly = true)
+    public Optional<Stage> nextStage(Stage current, boolean forward) {
+        return stageRepository.findByServiceOrderByStepOrderAsc(current.getService()).stream()
+                .filter(s -> s.getStepOrder() > current.getStepOrder())
+                .filter(s -> forward || !s.isOptional())
+                .findFirst();
+    }
+
+    // True if this officer may act on the application right now (used by the UI too).
+    public boolean canAct(Application app, User officer) {
+        try {
+            checkOfficerCanAct(app, officer);
+            return true;
+        } catch (IllegalStateException e) {
+            return false;
+        }
     }
 
     // ---------------------------------------------------------------
@@ -339,10 +451,15 @@ public class WorkflowService {
         if (officer.getRole() != stage.getHandlerRole()) {
             throw new IllegalStateException("Your role cannot act on this stage");
         }
-        String dept = stage.getDepartment();
-        if (dept != null && !dept.isBlank() && !dept.equalsIgnoreCase(officer.getDepartment())) {
+        if (!inOfficerDepartment(stage, officer)) {
             throw new IllegalStateException("This stage belongs to another department");
         }
+    }
+
+    // A stage without a department is open to every officer of its role.
+    private boolean inOfficerDepartment(Stage stage, User officer) {
+        String dept = stage.getDepartment();
+        return dept == null || dept.isBlank() || dept.equalsIgnoreCase(officer.getDepartment());
     }
 
     // Every decision is saved to the audit trail (never edited or deleted).
@@ -383,7 +500,7 @@ public class WorkflowService {
      * Whitelist allowed fields: "name", "phone", "course", "rollNumber".
      * Throws IllegalStateException if formData is missing, invalid, or field is not allowed.
      */
-    private void applyStudentRecordChange(Application app) {
+    private void applyStudentRecordChange(Application app, User officer) {
         String formData = app.getFormData();
         if (formData == null || formData.isBlank()) {
             throw new IllegalStateException("Form data is missing or empty");
@@ -421,6 +538,13 @@ public class WorkflowService {
         }
 
         User student = app.getStudent();
+        String oldValue = switch (field) {
+            case "name" -> student.getName();
+            case "phone" -> student.getPhone();
+            case "course" -> student.getCourse();
+            case "rollNumber" -> student.getRollNumber();
+            default -> null;
+        };
         switch (field) {
             case "name" -> student.setName(newValue);
             case "phone" -> student.setPhone(newValue);
@@ -429,5 +553,8 @@ public class WorkflowService {
             default -> throw new IllegalStateException("Field '" + field + "' is not allowed to be updated");
         }
         userRepository.save(student);
+        auditService.log(officer, "STUDENT_RECORD_UPDATED",
+                student.getEmail() + ": " + field + " changed from '" + oldValue + "' to '" + newValue
+                        + "' (application " + app.getReferenceNumber() + ")");
     }
 }

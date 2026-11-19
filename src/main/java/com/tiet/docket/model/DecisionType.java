@@ -1,6 +1,8 @@
 package com.tiet.docket.model;
 
 public enum DecisionType {
+    SUBMITTED,
+    RESUBMITTED,
     APPROVED,
     REJECTED,
     CORRECTION_REQUESTED,

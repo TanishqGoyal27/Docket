@@ -19,8 +19,6 @@ public class DataInitializer {
             createUser(userRepository, passwordEncoder, "Test Student", "student@docket.com", Role.STUDENT, null);
             createUser(userRepository, passwordEncoder, "Test Admin Officer", "adminofficer@docket.com",
                     Role.ADMIN_OFFICER, "Administration");
-            createUser(userRepository, passwordEncoder, "Test Professor", "professor@docket.com", Role.PROFESSOR,
-                    "Computer Science");
             createUser(userRepository, passwordEncoder, "Test HOD", "hod@docket.com", Role.HOD, "Computer Science");
             createUser(userRepository, passwordEncoder, "Test Scholarship Officer", "scholarship@docket.com",
                     Role.SCHOLARSHIP_OFFICER, "Scholarship");
