@@ -146,6 +146,7 @@ class AdminServiceTest {
     @Test
     void addingStageAppendsMaxPlusOneAndEngineAdvancesToIt() {
         com.tiet.docket.model.Service idCard = serviceRepository.findByName("ID Card").orElseThrow();
+        idCard.setFeeAmount(0);   // this test is about stages, not the fee check
         List<Stage> originalStages = stageRepository.findByServiceOrderByStepOrderAsc(idCard);
         int maxOrder = originalStages.get(originalStages.size() - 1).getStepOrder();
 
@@ -160,19 +161,15 @@ class AdminServiceTest {
         app.setService(idCard);
         app = workflowService.submit(app);
 
-        // 3. Move through stages 1 and 2
-        app = workflowService.approve(app.getId(), adminOfficer);     // Stage 1 -> 2
-        app = workflowService.approve(app.getId(), financeOfficer);   // Stage 2 -> 3
-
-        // 4. Approve Stage 3 (previously the final stage).
-        // Since stage 4 now exists, it should move to stage 4 instead of finishing!
+        // 3. Approve the stage that used to be the last one.
+        // Since a new stage now exists, it should move there instead of finishing!
         app = workflowService.approve(app.getId(), adminOfficer);
         assertEquals(ApplicationStatus.UNDER_REVIEW, app.getStatus());
         assertNotNull(app.getCurrentStage());
         assertEquals(appended.getId(), app.getCurrentStage().getId());
         assertEquals(maxOrder + 1, app.getCurrentStage().getStepOrder());
 
-        // 5. Approve the new stage 4 -> now it finishes as APPROVED
+        // 4. Approve the new stage -> now it finishes as APPROVED
         app = workflowService.approve(app.getId(), adminOfficer);
         assertEquals(ApplicationStatus.APPROVED, app.getStatus());
         assertNull(app.getCurrentStage());

@@ -34,11 +34,15 @@ public class ApplicationDocument {
     private String fileName;
 
     /**
-     * Path on the server where the file is saved.
-     * (e.g. "/uploads/applications/2026/photo.jpg")
+     * The uploaded bytes, kept in the database (stored_file table). Loaded only
+     * when the file is downloaded, so listing documents stays fast.
      */
-    @Column(nullable = false)
-    private String filePath;
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, optional = false)
+    @JoinColumn(name = "file_id")
+    private StoredFile file;
+
+    /** True for the receipt Docket generates after payment; only the student and Finance see it. */
+    private boolean feeReceipt = false;
 
     /** MIME type (e.g. "image/jpeg", "application/pdf"). */
     private String fileType;
@@ -76,8 +80,11 @@ public class ApplicationDocument {
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
 
-    public String getFilePath() { return filePath; }
-    public void setFilePath(String filePath) { this.filePath = filePath; }
+    public boolean isFeeReceipt() { return feeReceipt; }
+    public void setFeeReceipt(boolean feeReceipt) { this.feeReceipt = feeReceipt; }
+
+    public byte[] getData() { return file == null ? null : file.getContent(); }
+    public void setData(byte[] data) { this.file = new StoredFile(data); }
 
     public String getFileType() { return fileType; }
     public void setFileType(String fileType) { this.fileType = fileType; }

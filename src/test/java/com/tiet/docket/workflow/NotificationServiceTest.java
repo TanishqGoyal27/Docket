@@ -73,19 +73,18 @@ class NotificationServiceTest {
     // ----------------------------------------------------------------
     @Test
     void approveToNextStageNotifiesNextRole() {
-        // Create a FINANCE_OFFICER so they can receive the notification
-        // when the ID Card application moves to "Fee verification" (stage 2).
-        User financeOfficer = createUser("test-notif-finance@docket.com", Role.FINANCE_OFFICER);
+        // A reimbursement claim moves from the HOD (stage 1) to Finance (stage 2)
+        User hod = createUser("test-notif-hod@docket.com", Role.HOD);
+        User finance = createUser("test-notif-finance@docket.com", Role.FINANCE_OFFICER);
+        serviceRepository.findByName("Reimbursement").orElseThrow().setRequiresSupervisorApproval(false);
 
-        Application app = submitApplication("ID Card");
+        Application app = submitApplication("Reimbursement");
+        workflowService.approve(app.getId(), hod);
 
-        // Admin approves stage 1 -> application moves to stage 2 (Finance Officer)
-        workflowService.approve(app.getId(), adminOfficer);
-
-        // Finance officer should now have a notification.
-        List<Notification> financeNotes = notificationService.getForUser(financeOfficer);
+        // The Finance Officer should now have a notification.
+        List<Notification> financeNotes = notificationService.getForUser(finance);
         assertFalse(financeNotes.isEmpty(),
-                "Finance officer should receive a notification after stage 1 approval");
+                "Finance should receive a notification after stage 1 approval");
         assertTrue(financeNotes.get(0).getMessage().contains(app.getReferenceNumber()),
                 "Finance notification should contain the reference number");
     }

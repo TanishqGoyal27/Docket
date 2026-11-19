@@ -33,3 +33,11 @@ build/
 .vscode/*
 !.vscode/tasks.json
 uploads/
+### React frontend ###
+frontend/node_modules/
+frontend/node/
+# Built by `npm run build` / Maven into the Spring Boot static folder
+src/main/resources/static/
+
+### Local database file ###
+data/

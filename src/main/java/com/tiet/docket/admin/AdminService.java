@@ -1,5 +1,6 @@
 package com.tiet.docket.admin;
 
+import com.tiet.docket.model.ApplicationStatus;
 import com.tiet.docket.model.RequiredDocument;
 import com.tiet.docket.model.Role;
 import com.tiet.docket.model.Stage;
@@ -191,6 +192,55 @@ public class AdminService {
         service.setDescription(description != null ? description.trim() : "");
         service.setActive(active);
         return serviceRepository.save(service);
+    }
+
+    /**
+     * Adds a new service purely by configuration (QR18). It starts inactive so the
+     * Administrator can add its stages and documents before students see it.
+     */
+    public com.tiet.docket.model.Service createService(String name, String description,
+                                                       ApplicationStatus finalStatus, boolean requiresVisit) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Service name is required");
+        }
+        if (serviceRepository.findByName(name.trim()).isPresent()) {
+            throw new IllegalArgumentException("A service named '" + name.trim() + "' already exists");
+        }
+        if (finalStatus != ApplicationStatus.APPROVED && finalStatus != ApplicationStatus.VERIFIED) {
+            throw new IllegalArgumentException("Final outcome must be APPROVED or VERIFIED");
+        }
+        com.tiet.docket.model.Service service = new com.tiet.docket.model.Service();
+        service.setName(name.trim());
+        service.setDescription(description != null ? description.trim() : "");
+        service.setFinalStatus(finalStatus);
+        service.setRequiresVisit(requiresVisit);
+        service.setActive(false);
+        return serviceRepository.save(service);
+    }
+
+    /** Sets the online application fee in rupees; 0 means the service is free. */
+    public com.tiet.docket.model.Service setServiceFee(Long serviceId, int feeAmount) {
+        if (feeAmount < 0 || feeAmount > 100000) {
+            throw new IllegalArgumentException("The fee must be between Rs. 0 and Rs. 1,00,000");
+        }
+        com.tiet.docket.model.Service service = getServiceById(serviceId);
+        service.setFeeAmount(feeAmount);
+        return serviceRepository.save(service);
+    }
+
+    /** Clears a login lock (QR16) so the user can sign in again straight away. */
+    public User unlockUser(Long userId) {
+        User user = getUserById(userId);
+        user.setLockedUntil(null);
+        user.setFailedLoginAttempts(0);
+        return userRepository.save(user);
+    }
+
+    /** Marks a stage as used only when the previous officer forwards to it. */
+    public Stage setStageOptional(Long stageId, boolean optional) {
+        Stage stage = getStageById(stageId);
+        stage.setOptional(optional);
+        return stageRepository.save(stage);
     }
 
     @Transactional(readOnly = true)
