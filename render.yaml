@@ -1,0 +1,15 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, then pick this repository.
+services:
+  - type: web
+    name: docket
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      # Render's proxy terminates HTTPS; this keeps redirects and cookies on https
+      - key: SERVER_FORWARD_HEADERS_STRATEGY
+        value: framework
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      # Optional, set in the dashboard: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, DOCKET_UPI_ID,
+      # SPRING_MAIL_* (see application.properties). Without them Docket uses its sandbox and outbox.
