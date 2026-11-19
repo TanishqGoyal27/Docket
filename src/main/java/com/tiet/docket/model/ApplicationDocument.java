@@ -1,6 +1,7 @@
 package com.tiet.docket.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 import java.time.LocalDateTime;
 
 /**
@@ -44,6 +45,10 @@ public class ApplicationDocument {
     /** True for the receipt Docket generates after payment; only the student and Finance see it. */
     private boolean feeReceipt = false;
 
+    /** True once the student uploads a newer file for the same checklist item on a correction. */
+    @ColumnDefault("false")   // lets the column be added to a database that already has documents
+    private boolean replaced = false;
+
     /** MIME type (e.g. "image/jpeg", "application/pdf"). */
     private String fileType;
 
@@ -79,6 +84,9 @@ public class ApplicationDocument {
 
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
+
+    public boolean isReplaced() { return replaced; }
+    public void setReplaced(boolean replaced) { this.replaced = replaced; }
 
     public boolean isFeeReceipt() { return feeReceipt; }
     public void setFeeReceipt(boolean feeReceipt) { this.feeReceipt = feeReceipt; }

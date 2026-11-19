@@ -15,6 +15,7 @@ import com.tiet.docket.repository.FeePaymentRepository;
 import com.tiet.docket.workflow.NotificationService;
 import com.tiet.docket.workflow.SupervisorApprovalService;
 import com.tiet.docket.workflow.WorkflowService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,13 +43,17 @@ public class PaymentService {
     private final WorkflowService workflowService;
     private final NotificationService notificationService;
     private final SupervisorApprovalService supervisorApprovalService;
+    private final String upiId;
+    private final String upiName;
 
     public PaymentService(PaymentGateway gateway, FeePaymentRepository feePaymentRepository,
                           ApplicationRepository applicationRepository,
                           ApplicationDocumentRepository documentRepository,
                           DecisionHistoryRepository historyRepository,
                           WorkflowService workflowService, NotificationService notificationService,
-                          SupervisorApprovalService supervisorApprovalService) {
+                          SupervisorApprovalService supervisorApprovalService,
+                          @Value("${docket.payment.upi-id:}") String upiId,
+                          @Value("${docket.payment.upi-name:TIET Fees}") String upiName) {
         this.gateway = gateway;
         this.feePaymentRepository = feePaymentRepository;
         this.applicationRepository = applicationRepository;
@@ -57,12 +62,17 @@ public class PaymentService {
         this.workflowService = workflowService;
         this.notificationService = notificationService;
         this.supervisorApprovalService = supervisorApprovalService;
+        this.upiId = upiId.isBlank() ? DEMO_UPI_ID : upiId.trim();
+        this.upiName = upiName;
     }
 
     /** What the browser needs to open the checkout. */
     public record CheckoutOrder(String gateway, String keyId, String orderId, long amountPaise, String currency,
                                 String referenceNumber, String serviceName, String name, String email,
-                                String phone) {}
+                                String phone, String upiId, String upiName, boolean upiDemo) {}
+
+    // Placeholder that UPI apps reject, so a test scan can never send money to a real person
+    static final String DEMO_UPI_ID = "docket-demo@examplebank";
 
     public PaymentGateway gateway() {
         return gateway;
@@ -91,7 +101,8 @@ public class PaymentService {
 
         User s = app.getStudent();
         return new CheckoutOrder(gateway.name(), gateway.publicKey(), payment.getOrderId(), fee * 100L, "INR",
-                app.getReferenceNumber(), app.getService().getName(), s.getName(), s.getEmail(), s.getPhone());
+                app.getReferenceNumber(), app.getService().getName(), s.getName(), s.getEmail(), s.getPhone(),
+                upiId, upiName, DEMO_UPI_ID.equals(upiId));
     }
 
     /** Sandbox only: acts as the gateway's checkout completing a payment. */
@@ -121,6 +132,41 @@ public class PaymentService {
         }
 
         payment.setPaymentId(paymentId);
+        return finishPayment(app, student, payment);
+    }
+
+    /**
+     * UPI: the student paid the institute's UPI ID from their own app (QR or UPI ID) and enters the
+     * 12-digit UTR it shows. Docket cannot see the bank, so the Finance Officer confirms the UTR
+     * against the bank statement before the final approval.
+     */
+    @Transactional
+    public Application completeUpiPayment(Long applicationId, User student, String utr) {
+        Application app = ownApplication(applicationId, student);
+        if (app.getStatus() != ApplicationStatus.PAYMENT_PENDING || app.getService().getFeeAmount() <= 0) {
+            throw new IllegalStateException("This application does not need a payment");
+        }
+        String ref = utr == null ? "" : utr.trim();
+        if (!ref.matches("\\d{12}")) {
+            throw new IllegalArgumentException("Enter the 12-digit UTR / UPI reference number shown in your UPI app");
+        }
+        if (feePaymentRepository.existsByPaymentId(ref)) {
+            throw new IllegalArgumentException("This UTR has already been used for another payment");
+        }
+        FeePayment payment = feePaymentRepository.findByApplication(app).orElseGet(FeePayment::new);
+        if (payment.getStatus() == FeePayment.Status.PAID) {
+            throw new IllegalStateException("The fee for this application is already paid");
+        }
+        payment.setApplication(app);
+        payment.setAmount(app.getService().getFeeAmount());
+        payment.setGateway("UPI");
+        payment.setOrderId(null);
+        payment.setPaymentId(ref);
+        return finishPayment(app, student, payment);
+    }
+
+    // Records the payment, attaches the receipt and submits the application
+    private Application finishPayment(Application app, User student, FeePayment payment) {
         payment.setStatus(FeePayment.Status.PAID);
         payment.setPaidAt(LocalDateTime.now());
         payment.setVerification(FeePayment.Verification.PENDING);
@@ -222,7 +268,11 @@ public class PaymentService {
                 "Amount paid:       Rs. " + p.getAmount() + ".00",
                 "Payment ID:        " + p.getPaymentId(),
                 "Order ID:          " + p.getOrderId(),
-                "Gateway:           " + ("SANDBOX".equals(p.getGateway()) ? "Docket Sandbox (test mode, no real money)" : "Razorpay"),
+                "Paid through:      " + switch (p.getGateway()) {
+                    case "SANDBOX" -> "Docket Sandbox (test mode, no real money)";
+                    case "UPI" -> "UPI to " + upiId + " (UTR entered by the student)";
+                    default -> "Razorpay";
+                },
                 "Status:            PAID - subject to verification by the Finance Officer",
                 "",
                 "This is a computer-generated receipt and needs no signature."));
